@@ -7,7 +7,7 @@ export default defineConfig({
     "src/retry/index.ts",
     "src/client/index.ts",
   ],
-  format: ["esm"],
+  format: ["esm", "cjs"],
   dts: true,
   sourcemap: true,
   clean: true,
