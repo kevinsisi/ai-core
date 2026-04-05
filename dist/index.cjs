@@ -285,6 +285,7 @@ async function withRetry(fn, initialKey, options = {}) {
 }
 
 // src/client/gemini-client.ts
+var import_node_fs = require("fs");
 var import_generative_ai = require("@google/generative-ai");
 
 // src/client/types.ts
@@ -316,6 +317,22 @@ function buildHistory(history) {
     parts: [{ text: msg.parts }]
   }));
 }
+function buildParts(prompt, images) {
+  const parts = [{ text: prompt }];
+  for (const image of images ?? []) {
+    if (image.type === "inline") {
+      parts.push({
+        inlineData: { mimeType: image.mimeType, data: image.data }
+      });
+    } else {
+      const data = (0, import_node_fs.readFileSync)(image.filePath).toString("base64");
+      parts.push({
+        inlineData: { mimeType: image.mimeType, data }
+      });
+    }
+  }
+  return parts;
+}
 var GeminiClient = class {
   pool;
   maxRetries;
@@ -342,10 +359,12 @@ var GeminiClient = class {
             ...params.systemInstruction && {
               systemInstruction: params.systemInstruction
             },
+            ...params.tools && { tools: params.tools },
             ...params.maxOutputTokens && {
               generationConfig: { maxOutputTokens: params.maxOutputTokens }
             }
           });
+          const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
           if (params.history && params.history.length > 0) {
             const chat = model.startChat({
               history: buildHistory(params.history)
@@ -353,7 +372,7 @@ var GeminiClient = class {
             const result = await chat.sendMessage(params.prompt);
             return result.response;
           } else {
-            const result = await model.generateContent(params.prompt);
+            const result = await model.generateContent(content);
             return result.response;
           }
         },
@@ -410,9 +429,11 @@ var GeminiClient = class {
         model: params.model,
         ...params.systemInstruction && {
           systemInstruction: params.systemInstruction
-        }
+        },
+        ...params.tools && { tools: params.tools }
       });
-      const result = await model.generateContentStream(params.prompt);
+      const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
+      const result = await model.generateContentStream(content);
       for await (const chunk of result.stream) {
         const text = chunk.text();
         if (text) {

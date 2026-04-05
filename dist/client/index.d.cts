@@ -1,14 +1,39 @@
 import { K as KeyPool } from '../key-pool-Bpl3kOib.cjs';
+import * as _google_generative_ai from '@google/generative-ai';
 
 interface ChatMessage {
     role: "user" | "model";
     parts: string;
 }
+/** Base64-encoded image sent inline with the request. */
+interface InlineImagePart {
+    type: "inline";
+    /** MIME type, e.g. "image/png", "image/jpeg" */
+    mimeType: string;
+    /** Base64-encoded image data */
+    data: string;
+}
+/** Image loaded from a local file path (read and base64-encoded automatically). */
+interface FileImagePart {
+    type: "file";
+    /** MIME type, e.g. "image/png", "image/jpeg" */
+    mimeType: string;
+    /** Absolute or relative path to the image file */
+    filePath: string;
+}
+type ImagePart = InlineImagePart | FileImagePart;
 interface GenerateParams {
     /** Gemini model name, e.g. "gemini-2.5-flash" */
     model: string;
     systemInstruction?: string;
     prompt: string;
+    /** Optional images to send alongside the prompt (multimodal). */
+    images?: ImagePart[];
+    /**
+     * Optional Gemini tool declarations (e.g., Google Search grounding).
+     * Passed directly to `getGenerativeModel()`.
+     */
+    tools?: _google_generative_ai.Tool[];
     history?: ChatMessage[];
     maxOutputTokens?: number;
 }
@@ -36,6 +61,7 @@ declare class StreamInterruptedError extends Error {
  * - Key allocation and release via KeyPool
  * - Retry + key rotation via withRetry
  * - Usage tracking (returned in response, caller decides what to do with it)
+ * - Multimodal content (text + images) via GenerateParams.images
  */
 declare class GeminiClient {
     private readonly pool;

@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Part } from "@google/generative-ai";
 import type { KeyPool } from "../key-pool/key-pool.js";
 import { withRetry } from "../retry/with-retry.js";
 import type {
@@ -7,6 +9,7 @@ import type {
   ChatMessage,
   ClientOptions,
   TokenUsage,
+  ImagePart,
 } from "./types.js";
 import { StreamInterruptedError } from "./types.js";
 
@@ -35,6 +38,30 @@ function buildHistory(history: ChatMessage[]) {
   }));
 }
 
+/**
+ * Build a Part[] for a multimodal request.
+ * Returns an array with a TextPart followed by one InlineDataPart per image.
+ * File-path images are read synchronously and base64-encoded.
+ */
+export function buildParts(prompt: string, images?: ImagePart[]): Part[] {
+  const parts: Part[] = [{ text: prompt }];
+
+  for (const image of images ?? []) {
+    if (image.type === "inline") {
+      parts.push({
+        inlineData: { mimeType: image.mimeType, data: image.data },
+      });
+    } else {
+      const data = readFileSync(image.filePath).toString("base64");
+      parts.push({
+        inlineData: { mimeType: image.mimeType, data },
+      });
+    }
+  }
+
+  return parts;
+}
+
 // ── GeminiClient ───────────────────────────────────────────────────────
 
 /**
@@ -42,6 +69,7 @@ function buildHistory(history: ChatMessage[]) {
  * - Key allocation and release via KeyPool
  * - Retry + key rotation via withRetry
  * - Usage tracking (returned in response, caller decides what to do with it)
+ * - Multimodal content (text + images) via GenerateParams.images
  */
 export class GeminiClient {
   private readonly pool: KeyPool;
@@ -74,10 +102,15 @@ export class GeminiClient {
             ...(params.systemInstruction && {
               systemInstruction: params.systemInstruction,
             }),
+            ...(params.tools && { tools: params.tools }),
             ...(params.maxOutputTokens && {
               generationConfig: { maxOutputTokens: params.maxOutputTokens },
             }),
           });
+
+          const content = params.images?.length
+            ? buildParts(params.prompt, params.images)
+            : params.prompt;
 
           if (params.history && params.history.length > 0) {
             const chat = model.startChat({
@@ -86,7 +119,7 @@ export class GeminiClient {
             const result = await chat.sendMessage(params.prompt);
             return result.response;
           } else {
-            const result = await model.generateContent(params.prompt);
+            const result = await model.generateContent(content);
             return result.response;
           }
         },
@@ -154,9 +187,14 @@ export class GeminiClient {
         ...(params.systemInstruction && {
           systemInstruction: params.systemInstruction,
         }),
+        ...(params.tools && { tools: params.tools }),
       });
 
-      const result = await model.generateContentStream(params.prompt);
+      const content = params.images?.length
+        ? buildParts(params.prompt, params.images)
+        : params.prompt;
+
+      const result = await model.generateContentStream(content);
 
       for await (const chunk of result.stream) {
         const text = chunk.text();

@@ -5,6 +5,28 @@ export interface ChatMessage {
   parts: string;
 }
 
+// ── Image part types ───────────────────────────────────────────────────
+
+/** Base64-encoded image sent inline with the request. */
+export interface InlineImagePart {
+  type: "inline";
+  /** MIME type, e.g. "image/png", "image/jpeg" */
+  mimeType: string;
+  /** Base64-encoded image data */
+  data: string;
+}
+
+/** Image loaded from a local file path (read and base64-encoded automatically). */
+export interface FileImagePart {
+  type: "file";
+  /** MIME type, e.g. "image/png", "image/jpeg" */
+  mimeType: string;
+  /** Absolute or relative path to the image file */
+  filePath: string;
+}
+
+export type ImagePart = InlineImagePart | FileImagePart;
+
 // ── Generate types ─────────────────────────────────────────────────────
 
 export interface GenerateParams {
@@ -12,6 +34,13 @@ export interface GenerateParams {
   model: string;
   systemInstruction?: string;
   prompt: string;
+  /** Optional images to send alongside the prompt (multimodal). */
+  images?: ImagePart[];
+  /**
+   * Optional Gemini tool declarations (e.g., Google Search grounding).
+   * Passed directly to `getGenerativeModel()`.
+   */
+  tools?: import("@google/generative-ai").Tool[];
   history?: ChatMessage[];
   maxOutputTokens?: number;
 }

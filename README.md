@@ -87,6 +87,39 @@ const { text } = await client.generateContent({
     { role: "model", parts: "Why did the chicken cross the road? To get to the other side!" },
   ],
 });
+
+// Multimodal — inline base64 image
+const { text: visionText } = await client.generateContent({
+  model: "gemini-2.5-flash",
+  prompt: "What does this diagram show?",
+  images: [
+    {
+      type: "inline",
+      mimeType: "image/png",
+      data: base64EncodedPng, // your base64 string
+    },
+  ],
+});
+
+// Multimodal — image from file path (read and encoded automatically)
+const { text: fileVision } = await client.generateContent({
+  model: "gemini-2.5-flash",
+  prompt: "Describe this image.",
+  images: [
+    {
+      type: "file",
+      mimeType: "image/jpeg",
+      filePath: "/tmp/screenshot.jpg",
+    },
+  ],
+});
+
+// Google Search grounding (tools)
+const { text: searchText } = await client.generateContent({
+  model: "gemini-2.5-flash",
+  prompt: "What is the latest news about TypeScript?",
+  tools: [{ googleSearchRetrieval: {} }],
+});
 ```
 
 ### 3. Use `withRetry` Directly (Low-level)
