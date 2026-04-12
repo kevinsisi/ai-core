@@ -14,6 +14,7 @@ type: project
 - `key-pool` — KeyPool + StorageAdapter interface + SqliteAdapter (optional peer dep)
 - `retry` — withRetry decorator with Gemini-aware error classification
 - `client` — GeminiClient wrapping KeyPool + withRetry with multimodal support
+- `agent-runtime` — shared active-task, pending-action, interrupt, and completion-gate primitives for long-running agents
 
 **Deployment:**
 - Published to GitHub Packages (`npm.pkg.github.com`) via GitHub Actions on `vX.Y.Z` tag push

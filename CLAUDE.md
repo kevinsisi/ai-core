@@ -15,6 +15,7 @@ src/
 ├── key-pool/      KeyPool + StorageAdapter + SqliteAdapter
 ├── retry/         withRetry + classifyError
 ├── client/        GeminiClient
+├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
 └── index.ts       統一 re-export
 ```
 
@@ -98,6 +99,7 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/key-pool` | KeyPool, SqliteAdapter, NoAvailableKeyError, ApiKey, StorageAdapter, KeyPoolOptions |
 | `@kevinsisi/ai-core/retry` | withRetry, classifyError, MaxRetriesExceededError, ErrorClass, RetryOptions |
 | `@kevinsisi/ai-core/client` | GeminiClient, StreamInterruptedError, ChatMessage, GenerateParams, GenerateResponse |
+| `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 
 ---
 
@@ -173,6 +175,13 @@ npm install @kevinsisi/ai-core
 ```
 
 （需在 `.npmrc` 設定 `@kevinsisi:registry=https://npm.pkg.github.com`）
+
+### AgentRuntime
+
+`AgentRuntime` 只接受可安全 structured-clone 的結構化資料作為 `metadata` 與 `pendingAction.args`。
+
+- 可接受：`string` / `number` / `boolean` / `null` / 陣列 / plain object
+- 不可接受：function、class instance、或其他不可 structured clone 的值
 
 ---
 

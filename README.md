@@ -1,6 +1,6 @@
 # @kevinsisi/ai-core
 
-Shared AI modules for the HomeProject — Gemini API key pool, retry logic, and GeminiClient wrapper.
+Shared AI modules for the HomeProject — Gemini key pool, retry logic, GeminiClient wrapper, and agent-runtime primitives.
 
 **Repo:** https://github.com/kevinsisi/ai-core
 
@@ -18,6 +18,7 @@ npm install github:kevinsisi/ai-core
 | `StorageAdapter` | Interface to plug any database backend into `KeyPool` |
 | `SqliteAdapter` | Built-in SQLite adapter (requires `better-sqlite3`) |
 | `GeminiClient` | Wrapper around `@google/generative-ai` with automatic key allocation and retry |
+| `AgentRuntime` | Structured runtime state for active tasks, pending actions, interrupts, and completion gates |
 | `withRetry` | Low-level retry helper with error classification and key rotation |
 | `classifyError` | Classifies an error as `quota` / `rate-limit` / `network` / `fatal` / `unknown` |
 | `NoAvailableKeyError` | Thrown when all keys are exhausted or in cooldown |
@@ -121,6 +122,51 @@ const { text: searchText } = await client.generateContent({
   tools: [{ googleSearchRetrieval: {} }],
 });
 ```
+
+### 2.5 Use `AgentRuntime` for long-running agents
+
+`AgentRuntime` gives HomeProject agents explicit state instead of relying only on transcript memory:
+
+```ts
+import { AgentRuntime } from "@kevinsisi/ai-core/agent-runtime";
+
+const runtime = new AgentRuntime();
+
+runtime.startTask({
+  id: "task-1",
+  objective: "Fix the playback bug",
+  currentStep: "Investigating root cause",
+  metadata: { project: "home-media" },
+  checkpoints: [
+    { id: "read-rules", content: "Read governing rules", status: "completed", priority: "high" },
+    { id: "implement", content: "Implement fix", status: "in_progress", priority: "high" },
+    { id: "verify", content: "Verify live behavior", status: "pending", priority: "high" },
+  ],
+});
+
+runtime.applyInterrupt({ kind: "requirement_update", message: "順便做長時間驗證" });
+
+runtime.createPendingAction({
+  actionName: "deploy",
+  args: { environment: "prod" },
+  sourceTurnId: "turn-14",
+  prompt: "是否現在部署？",
+  ttlMs: 30_000,
+});
+
+// Later, a short reply like `可以` can deterministically consume the stored action.
+const pending = runtime.consumePendingAction();
+```
+
+Important constraint:
+- `AgentRuntime` snapshots `metadata` and `pendingAction.args` with structured cloning so runtime state cannot be mutated from the outside.
+- Pass only structured plain data (`string` / `number` / `boolean` / `null` / arrays / plain objects of the same kinds).
+- Do not pass functions, class instances, or other non-cloneable values.
+
+Recommended layering:
+- `GeminiClient` / `withRetry` / `KeyPool`: model access, retry, and key rotation
+- `AgentRuntime`: active task state, pending action, interrupt integration, completion checks
+- Consumer app: semantic classification, tool routing, history persistence, and side effects
 
 ### 3. Use `withRetry` Directly (Low-level)
 

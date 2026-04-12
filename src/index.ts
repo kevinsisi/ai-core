@@ -20,3 +20,18 @@ export type {
   TokenUsage,
   ClientOptions,
 } from "./client/index.js";
+
+// Agent runtime
+export { AgentRuntime } from "./agent-runtime/index.js";
+export type {
+  ActiveTask,
+  AgentRuntimeOptions,
+  CheckpointPriority,
+  CheckpointStatus,
+  CompletionCheckResult,
+  InterruptClassification,
+  InterruptEvent,
+  PendingAction,
+  TaskCheckpoint,
+  TaskStatus,
+} from "./agent-runtime/index.js";

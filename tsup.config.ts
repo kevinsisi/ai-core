@@ -6,6 +6,7 @@ export default defineConfig({
     "src/key-pool/index.ts",
     "src/retry/index.ts",
     "src/client/index.ts",
+    "src/agent-runtime/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,
