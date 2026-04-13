@@ -20,6 +20,10 @@ export class KeyPool {
   private readonly authCooldownMs: number;
   /** In-memory cache; reloaded on first use or after invalidation */
   private cache: ApiKey[] | null = null;
+  /** Active allocations not yet released. Lower is better when picking keys. */
+  private readonly inFlight = new Map<string, number>();
+  /** Last allocation timestamp by key to avoid hammering the same key repeatedly. */
+  private readonly lastAllocatedAt = new Map<string, number>();
 
   constructor(adapter: StorageAdapter, options: KeyPoolOptions = {}) {
     this.adapter = adapter;
@@ -29,8 +33,8 @@ export class KeyPool {
 
   // ── Internal helpers ───────────────────────────────────────────────
 
-  private async getKeys(): Promise<ApiKey[]> {
-    if (!this.cache) {
+  private async getKeys(forceReload = false): Promise<ApiKey[]> {
+    if (!this.cache || forceReload) {
       this.cache = await this.adapter.getKeys();
     }
     return this.cache;
@@ -45,26 +49,61 @@ export class KeyPool {
     return keys.find((k) => k.key === key);
   }
 
+  private rankAvailable(keys: ApiKey[]): ApiKey[] {
+    const groups = new Map<string, ApiKey[]>();
+
+    for (const key of keys) {
+      const inFlight = this.inFlight.get(key.key) ?? 0;
+      const lastAllocatedAt = this.lastAllocatedAt.get(key.key) ?? 0;
+      const groupKey = `${inFlight}:${key.usageCount}:${lastAllocatedAt}`;
+      const group = groups.get(groupKey);
+      if (group) {
+        group.push(key);
+      } else {
+        groups.set(groupKey, [key]);
+      }
+    }
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => {
+        const [aInFlight, aUsage, aLast] = a.split(":").map(Number);
+        const [bInFlight, bUsage, bLast] = b.split(":").map(Number);
+        if (aInFlight !== bInFlight) return aInFlight - bInFlight;
+        if (aUsage !== bUsage) return aUsage - bUsage;
+        return aLast - bLast;
+      })
+      .flatMap(([, group]) => shuffle(group));
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
 
   /**
-   * Allocate up to `count` available keys using shuffle-based selection.
-   * Returns fewer than `count` if the pool is smaller.
-   * Throws NoAvailableKeyError if zero keys are available.
+   * Allocate up to `count` available keys using load-aware ranking.
+   * Throws NoAvailableKeyError if zero keys are available or if `count`
+   * exceeds the number of currently available keys.
    */
   async allocate(count: number): Promise<string[]> {
-    const keys = await this.getKeys();
+    const keys = await this.getKeys(true);
     const available = this.availableKeys(keys);
 
     if (available.length === 0) {
       throw new NoAvailableKeyError();
     }
 
-    const shuffled = shuffle(available);
-    // Cycle through available keys if count > available.length
+    if (count > available.length) {
+      throw new NoAvailableKeyError(
+        `Requested ${count} key(s), but only ${available.length} available in pool`
+      );
+    }
+
+    const ranked = this.rankAvailable(available);
+    const now = Date.now();
     const result: string[] = [];
     for (let i = 0; i < count; i++) {
-      result.push(shuffled[i % shuffled.length].key);
+      const selected = ranked[i].key;
+      result.push(selected);
+      this.inFlight.set(selected, (this.inFlight.get(selected) ?? 0) + 1);
+      this.lastAllocatedAt.set(selected, now + i);
     }
     return result;
   }
@@ -93,7 +132,16 @@ export class KeyPool {
       record.usageCount += 1;
     }
 
-    await this.adapter.updateKey(record);
+    try {
+      await this.adapter.updateKey(record);
+    } finally {
+      const inFlight = this.inFlight.get(key) ?? 0;
+      if (inFlight <= 1) {
+        this.inFlight.delete(key);
+      } else {
+        this.inFlight.set(key, inFlight - 1);
+      }
+    }
   }
 
   /**
@@ -118,6 +166,6 @@ export class KeyPool {
    * Return all keys with current status (for diagnostics / admin UI).
    */
   async status(): Promise<ApiKey[]> {
-    return this.getKeys();
+    return this.getKeys(true);
   }
 }

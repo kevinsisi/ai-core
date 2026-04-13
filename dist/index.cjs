@@ -55,14 +55,18 @@ var KeyPool = class {
   authCooldownMs;
   /** In-memory cache; reloaded on first use or after invalidation */
   cache = null;
+  /** Active allocations not yet released. Lower is better when picking keys. */
+  inFlight = /* @__PURE__ */ new Map();
+  /** Last allocation timestamp by key to avoid hammering the same key repeatedly. */
+  lastAllocatedAt = /* @__PURE__ */ new Map();
   constructor(adapter, options = {}) {
     this.adapter = adapter;
     this.defaultCooldownMs = options.defaultCooldownMs ?? 6e4;
     this.authCooldownMs = options.authCooldownMs ?? 30 * 6e4;
   }
   // ── Internal helpers ───────────────────────────────────────────────
-  async getKeys() {
-    if (!this.cache) {
+  async getKeys(forceReload = false) {
+    if (!this.cache || forceReload) {
       this.cache = await this.adapter.getKeys();
     }
     return this.cache;
@@ -74,22 +78,52 @@ var KeyPool = class {
   findByKey(keys, key) {
     return keys.find((k) => k.key === key);
   }
+  rankAvailable(keys) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const key of keys) {
+      const inFlight = this.inFlight.get(key.key) ?? 0;
+      const lastAllocatedAt = this.lastAllocatedAt.get(key.key) ?? 0;
+      const groupKey = `${inFlight}:${key.usageCount}:${lastAllocatedAt}`;
+      const group = groups.get(groupKey);
+      if (group) {
+        group.push(key);
+      } else {
+        groups.set(groupKey, [key]);
+      }
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      const [aInFlight, aUsage, aLast] = a.split(":").map(Number);
+      const [bInFlight, bUsage, bLast] = b.split(":").map(Number);
+      if (aInFlight !== bInFlight) return aInFlight - bInFlight;
+      if (aUsage !== bUsage) return aUsage - bUsage;
+      return aLast - bLast;
+    }).flatMap(([, group]) => shuffle(group));
+  }
   // ── Public API ─────────────────────────────────────────────────────
   /**
-   * Allocate up to `count` available keys using shuffle-based selection.
-   * Returns fewer than `count` if the pool is smaller.
-   * Throws NoAvailableKeyError if zero keys are available.
+   * Allocate up to `count` available keys using load-aware ranking.
+   * Throws NoAvailableKeyError if zero keys are available or if `count`
+   * exceeds the number of currently available keys.
    */
   async allocate(count) {
-    const keys = await this.getKeys();
+    const keys = await this.getKeys(true);
     const available = this.availableKeys(keys);
     if (available.length === 0) {
       throw new NoAvailableKeyError();
     }
-    const shuffled = shuffle(available);
+    if (count > available.length) {
+      throw new NoAvailableKeyError(
+        `Requested ${count} key(s), but only ${available.length} available in pool`
+      );
+    }
+    const ranked = this.rankAvailable(available);
+    const now = Date.now();
     const result = [];
     for (let i = 0; i < count; i++) {
-      result.push(shuffled[i % shuffled.length].key);
+      const selected = ranked[i].key;
+      result.push(selected);
+      this.inFlight.set(selected, (this.inFlight.get(selected) ?? 0) + 1);
+      this.lastAllocatedAt.set(selected, now + i);
     }
     return result;
   }
@@ -109,7 +143,16 @@ var KeyPool = class {
     } else {
       record.usageCount += 1;
     }
-    await this.adapter.updateKey(record);
+    try {
+      await this.adapter.updateKey(record);
+    } finally {
+      const inFlight = this.inFlight.get(key) ?? 0;
+      if (inFlight <= 1) {
+        this.inFlight.delete(key);
+      } else {
+        this.inFlight.set(key, inFlight - 1);
+      }
+    }
   }
   /**
    * Permanently deactivate a key (e.g., suspended by Google).
@@ -131,7 +174,7 @@ var KeyPool = class {
    * Return all keys with current status (for diagnostics / admin UI).
    */
   async status() {
-    return this.getKeys();
+    return this.getKeys(true);
   }
 };
 

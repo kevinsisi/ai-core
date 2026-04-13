@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { KeyPool, NoAvailableKeyError } from "../key-pool/index.js";
 import type { ApiKey, StorageAdapter } from "../key-pool/index.js";
 
@@ -38,6 +38,14 @@ function makeAdapter(keys: ApiKey[]): StorageAdapter & { updated: ApiKey[] } {
 // ── Key Pool Tests ────────────────────────────────────────────────────
 
 describe("KeyPool", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("allocate", () => {
     it("returns a key from the pool", async () => {
       const adapter = makeAdapter([makeKey(1, "key-a")]);
@@ -74,17 +82,14 @@ describe("KeyPool", () => {
       expect(keys[0]).toBe("key-a");
     });
 
-    it("returns fewer keys than requested when pool is smaller (graceful degradation)", async () => {
+    it("throws when requesting more keys than are available", async () => {
       const adapter = makeAdapter([
         makeKey(1, "key-a"),
         makeKey(2, "key-b"),
       ]);
       const pool = new KeyPool(adapter);
-      // Request 3, only 2 available — should cycle and return 3
-      const keys = await pool.allocate(3);
-      expect(keys).toHaveLength(3);
-      // All returned keys must be from the pool
-      keys.forEach((k) => expect(["key-a", "key-b"]).toContain(k));
+
+      await expect(pool.allocate(3)).rejects.toThrow(NoAvailableKeyError);
     });
 
     it("uses shuffle so different keys are returned across calls", async () => {
@@ -102,6 +107,59 @@ describe("KeyPool", () => {
       }
       // With 10 keys and 20 draws, statistically we expect > 1 unique key
       expect(results.size).toBeGreaterThan(1);
+    });
+
+    it("prefers less-used keys before hotter ones", async () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      const adapter = makeAdapter([
+        makeKey(1, "key-hot", { usageCount: 5 }),
+        makeKey(2, "key-cold-a", { usageCount: 0 }),
+        makeKey(3, "key-cold-b", { usageCount: 0 }),
+      ]);
+      const pool = new KeyPool(adapter);
+
+      const keys = await pool.allocate(2);
+
+      expect(new Set(keys)).toEqual(new Set(["key-cold-a", "key-cold-b"]));
+    });
+
+    it("spreads concurrent single allocations across idle keys before reusing one", async () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      const adapter = makeAdapter([
+        makeKey(1, "key-a"),
+        makeKey(2, "key-b"),
+        makeKey(3, "key-c"),
+      ]);
+      const pool = new KeyPool(adapter);
+
+      const first = await pool.allocate(1);
+      const second = await pool.allocate(1);
+      const third = await pool.allocate(1);
+
+      expect(new Set([first[0], second[0], third[0]])).toEqual(
+        new Set(["key-a", "key-b", "key-c"])
+      );
+    });
+
+    it("refreshes storage state before allocation so persisted usage can rebalance picks", async () => {
+      const keys = [makeKey(1, "key-a"), makeKey(2, "key-b")];
+      const adapter = {
+        async getKeys() {
+          return keys.map((key) => ({ ...key }));
+        },
+        async updateKey(key: ApiKey) {
+          const idx = keys.findIndex((item) => item.id === key.id);
+          if (idx >= 0) keys[idx] = { ...key };
+        },
+      } satisfies StorageAdapter;
+      const pool = new KeyPool(adapter);
+
+      const [first] = await pool.allocate(1);
+      await pool.release(first, false);
+
+      const [second] = await pool.allocate(1);
+
+      expect(first).not.toBe(second);
     });
   });
 

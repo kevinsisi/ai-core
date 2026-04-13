@@ -37,14 +37,19 @@ declare class KeyPool {
     private readonly authCooldownMs;
     /** In-memory cache; reloaded on first use or after invalidation */
     private cache;
+    /** Active allocations not yet released. Lower is better when picking keys. */
+    private readonly inFlight;
+    /** Last allocation timestamp by key to avoid hammering the same key repeatedly. */
+    private readonly lastAllocatedAt;
     constructor(adapter: StorageAdapter, options?: KeyPoolOptions);
     private getKeys;
     private availableKeys;
     private findByKey;
+    private rankAvailable;
     /**
-     * Allocate up to `count` available keys using shuffle-based selection.
-     * Returns fewer than `count` if the pool is smaller.
-     * Throws NoAvailableKeyError if zero keys are available.
+     * Allocate up to `count` available keys using load-aware ranking.
+     * Throws NoAvailableKeyError if zero keys are available or if `count`
+     * exceeds the number of currently available keys.
      */
     allocate(count: number): Promise<string[]>;
     /**
