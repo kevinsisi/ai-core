@@ -257,6 +257,15 @@ const pool = new KeyPool(adapter, {
 | [auto-spec-test](../auto-spec-test) | None (uses `withRetry` directly) | `withRetry` for multi-agent test generation |
 | [sheet-to-car](../_car-maintain/sheet-to-car) | None (uses `withRetry` directly) | `withRetry` for car inventory AI agent |
 
+## key-manager integration note
+
+When consuming `key-manager` as an external registry, prefer its bucket-aware outputs over raw per-key counts:
+
+- `GET /api/keys/quota-summary` now distinguishes raw `available` keys from `trusted_available_keys` and `trusted_available_buckets`.
+- `projects` tags in key-manager act as quota-bucket hints; the **first tag** should be the shared Google project / quota bucket identifier.
+- `GET /api/keys/export?trusted_only=1` should be preferred over the legacy raw export when you need a trustworthy pool for automated consumers.
+- If key-manager reports `unscoped_keys > 0` or `mixed_buckets > 0`, treat the raw pool as potentially misleading until bucket tags are cleaned up.
+
 ## Development
 
 ```bash

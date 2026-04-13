@@ -193,7 +193,7 @@ npm install @kevinsisi/ai-core
 
 | 操作 | 方向 | 說明 |
 |---|---|---|
-| `syncFromManager` | key-manager → 消費者 | 從 `{key_manager_url}/api/keys/export` 拉取 available keys，透過 `addApiKey()` 寫入本地 pool |
+| `syncFromManager` | key-manager → 消費者 | 優先從 `{key_manager_url}/api/keys/export?trusted_only=1` 拉取 trusted keys；只有明知要接受不可信池時才使用 legacy raw export |
 | `testAllKeys` | 消費者 → Gemini API | 逐一對 pool 中的 active key 打 `generateContent`，依結果更新 `api_keys.cooldown_until` **並同步清除 `api_key_cooldowns`** |
 | `reportToManager` | 消費者 → key-manager | 將本地 key 狀態（cooldown、失效）回報給 key-manager（依 key-manager 實作定義） |
 | `getKeyStatus` | 消費者讀 pool | 透過 `KeyPool.status()` 或 `getKeyList()` 取得每把 key 的 available / cooldown / leased 狀態 |
@@ -208,6 +208,12 @@ db.prepare('DELETE FROM api_key_cooldowns WHERE api_key_suffix = ?').run(key.sli
 ```
 
 只更新 `api_keys` 不夠 — `api_key_cooldowns` 的舊值會在 `invalidateKeyCache()` 觸發 `syncKeyPoolState()` 時把 cooldown 還原。
+
+### 重要規則：信任 key-manager 的前提是 bucket metadata 完整
+
+- `key-manager` 的 `projects` 第一個 tag 應被視為共享 Google project / quota bucket ID。
+- 若 `GET /api/keys/quota-summary` 回傳 `unscoped_keys > 0` 或 `mixed_buckets > 0`，不可把 raw `available` key 數直接當成可用容量。
+- 消費者若有自動同步流程，應優先採用 `trusted_available_keys` / `trusted_available_buckets` 與 `trusted_only=1` export，而不是 legacy raw export。
 
 ### KeyPool.getAllocationLeaseMs()
 
