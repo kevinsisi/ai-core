@@ -9,6 +9,10 @@ interface ApiKey {
     isActive: boolean;
     /** Unix ms timestamp; 0 = not in cooldown */
     cooldownUntil: number;
+    /** Unix ms timestamp; 0 = not currently leased to an active caller */
+    leaseUntil: number;
+    /** Opaque lease token used to prevent stale holders from clearing newer leases. */
+    leaseToken: string | null;
     usageCount: number;
 }
 /**
@@ -18,14 +22,20 @@ interface ApiKey {
 interface StorageAdapter {
     /** Return all keys. KeyPool handles filtering logic. */
     getKeys(): Promise<ApiKey[]>;
-    /** Persist updated key state (cooldown, usageCount, isActive). */
-    updateKey(key: ApiKey): Promise<void>;
+    /** Try to acquire a lease atomically. Returns true on success. */
+    acquireLease(keyId: number, leaseUntil: number, leaseToken: string, now: number): Promise<boolean>;
+    /** Extend an active lease if the lease token still matches. */
+    renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number): Promise<boolean>;
+    /** Persist updated key state (cooldown, usageCount, lease, isActive). */
+    updateKey(key: ApiKey, expectedLeaseToken?: string | null): Promise<void>;
 }
 interface KeyPoolOptions {
     /** Default cooldown duration in ms when a key fails (default: 60_000) */
     defaultCooldownMs?: number;
     /** Longer cooldown for auth failures in ms (default: 1_800_000 = 30 min) */
     authCooldownMs?: number;
+    /** Lease duration in ms for active allocations (default: 300_000 = 5 min) */
+    allocationLeaseMs?: number;
 }
 declare class NoAvailableKeyError extends Error {
     constructor(message?: string);
@@ -35,34 +45,37 @@ declare class KeyPool {
     private readonly adapter;
     private readonly defaultCooldownMs;
     private readonly authCooldownMs;
+    private readonly allocationLeaseMs;
     /** In-memory cache; reloaded on first use or after invalidation */
     private cache;
-    /** Round-robin pointer — index into the full keys array */
-    private pointer;
+    /** Active allocations in the current process; fewer is better. */
+    private readonly inFlight;
+    /** Last allocation timestamp to avoid repeatedly hammering the same key. */
+    private readonly lastAllocatedAt;
+    /** Lease token held by this process for each allocated key. */
+    private readonly leaseTokens;
     constructor(adapter: StorageAdapter, options?: KeyPoolOptions);
     private getKeys;
     private availableKeys;
     private findByKey;
-    private findIndexByKey;
+    private rankAvailable;
+    private clearLease;
+    private releaseLocalTracking;
     /**
-     * Advance pointer to the next available key (round-robin).
-     * Wraps around modulo keys.length.
-     */
-    private advancePointer;
-    /**
-     * Allocate `count` available keys using round-robin selection.
-     * Starts from `pointer`, skips unavailable keys, wraps around.
-     * Throws NoAvailableKeyError if zero keys are available.
+     * Allocate up to `count` available keys using load-aware ranking.
+     * Throws NoAvailableKeyError if zero keys are available or the request
+     * asks for more keys than are currently available.
      */
     allocate(count: number): Promise<string[]>;
     /**
      * Release a key after use.
-     * Advances the pointer so the next allocate() gets the next key.
      * @param key - The API key string
      * @param failed - If true, sets cooldown; if false, increments usageCount
      * @param authFailure - If true, uses longer auth cooldown (default: false)
      */
     release(key: string, failed: boolean, authFailure?: boolean): Promise<void>;
+    getAllocationLeaseMs(): number;
+    renewLease(key: string): Promise<boolean>;
     /**
      * Permanently deactivate a key (e.g., suspended by Google).
      */

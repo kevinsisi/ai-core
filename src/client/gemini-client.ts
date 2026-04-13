@@ -80,6 +80,40 @@ export class GeminiClient {
     this.maxRetries = options.maxRetries ?? 3;
   }
 
+  private startLeaseHeartbeat(apiKey: string): {
+    stop: () => void;
+    getError: () => Error | null;
+  } {
+    let leaseError: Error | null = null;
+    const intervalMs = Math.max(
+      250,
+      Math.min(60_000, Math.floor(this.pool.getAllocationLeaseMs() / 2))
+    );
+    const timer = setInterval(() => {
+      this.pool
+        .renewLease(apiKey)
+        .then((renewed) => {
+          if (!renewed) {
+            leaseError = new Error(`Lost key lease for ${apiKey}`);
+            clearInterval(timer);
+          }
+        })
+        .catch((error) => {
+          leaseError = error instanceof Error ? error : new Error(String(error));
+          clearInterval(timer);
+        });
+    }, intervalMs);
+
+    if (typeof timer.unref === "function") {
+      timer.unref();
+    }
+
+    return {
+      stop: () => clearInterval(timer),
+      getError: () => leaseError,
+    };
+  }
+
   /**
    * Generate content (non-streaming).
    * Automatically allocates a key, calls Gemini, releases the key.
@@ -91,11 +125,18 @@ export class GeminiClient {
     let currentKey = initialKey;
     let failed = false;
     let authFailure = false;
+    let heartbeatKey = initialKey;
+    let heartbeat = this.startLeaseHeartbeat(initialKey);
 
     try {
       const response = await withRetry(
         async (apiKey) => {
           currentKey = apiKey;
+          if (apiKey !== heartbeatKey) {
+            heartbeat.stop();
+            heartbeat = this.startLeaseHeartbeat(apiKey);
+            heartbeatKey = apiKey;
+          }
           const genai = new GoogleGenerativeAI(apiKey);
           const model = genai.getGenerativeModel({
             model: params.model,
@@ -117,9 +158,13 @@ export class GeminiClient {
               history: buildHistory(params.history),
             });
             const result = await chat.sendMessage(params.prompt);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           } else {
             const result = await model.generateContent(content);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           }
         },
@@ -128,7 +173,7 @@ export class GeminiClient {
           maxRetries: this.maxRetries,
           rotateKey: async () => {
             // Release the failed key with cooldown before rotating
-            await this.pool.release(currentKey, true);
+            await this.pool.release(currentKey, true, authFailure);
             const [nextKey] = await this.pool.allocate(1);
             return nextKey;
           },
@@ -155,6 +200,7 @@ export class GeminiClient {
       }
       throw err;
     } finally {
+      heartbeat.stop();
       // Release the last key used (currentKey may have been rotated)
       if (failed && currentKey !== initialKey) {
         // rotateKey already released initialKey; release currentKey too
@@ -179,6 +225,7 @@ export class GeminiClient {
     const [key] = await this.pool.allocate(1);
     let chunksReceived = 0;
     let failed = false;
+    const heartbeat = this.startLeaseHeartbeat(key);
 
     try {
       const genai = new GoogleGenerativeAI(key);
@@ -197,6 +244,11 @@ export class GeminiClient {
       const result = await model.generateContentStream(content);
 
       for await (const chunk of result.stream) {
+        const leaseError = heartbeat.getError();
+        if (leaseError) {
+          failed = true;
+          throw new StreamInterruptedError(chunksReceived, leaseError);
+        }
         const text = chunk.text();
         if (text) {
           chunksReceived++;
@@ -205,8 +257,12 @@ export class GeminiClient {
       }
     } catch (err) {
       failed = true;
+      if (err instanceof StreamInterruptedError) {
+        throw err;
+      }
       throw new StreamInterruptedError(chunksReceived, err);
     } finally {
+      heartbeat.stop();
       await this.pool.release(key, failed).catch(() => {});
     }
   }

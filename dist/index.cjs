@@ -41,114 +41,218 @@ var NoAvailableKeyError = class extends Error {
 };
 
 // src/key-pool/key-pool.ts
+function shuffle(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 var KeyPool = class {
   adapter;
   defaultCooldownMs;
   authCooldownMs;
+  allocationLeaseMs;
   /** In-memory cache; reloaded on first use or after invalidation */
   cache = null;
-  /** Round-robin pointer — index into the full keys array */
-  pointer = 0;
+  /** Active allocations in the current process; fewer is better. */
+  inFlight = /* @__PURE__ */ new Map();
+  /** Last allocation timestamp to avoid repeatedly hammering the same key. */
+  lastAllocatedAt = /* @__PURE__ */ new Map();
+  /** Lease token held by this process for each allocated key. */
+  leaseTokens = /* @__PURE__ */ new Map();
   constructor(adapter, options = {}) {
     this.adapter = adapter;
     this.defaultCooldownMs = options.defaultCooldownMs ?? 6e4;
     this.authCooldownMs = options.authCooldownMs ?? 30 * 6e4;
+    this.allocationLeaseMs = options.allocationLeaseMs ?? 5 * 6e4;
   }
   // ── Internal helpers ───────────────────────────────────────────────
-  async getKeys() {
-    if (!this.cache) {
+  async getKeys(forceReload = false) {
+    if (!this.cache || forceReload) {
       this.cache = await this.adapter.getKeys();
     }
     return this.cache;
   }
   availableKeys(keys) {
     const now = Date.now();
-    return keys.filter((k) => k.isActive && k.cooldownUntil <= now);
+    return keys.filter(
+      (k) => k.isActive && k.cooldownUntil <= now && k.leaseUntil <= now && (this.inFlight.get(k.key) ?? 0) === 0
+    );
   }
   findByKey(keys, key) {
     return keys.find((k) => k.key === key);
   }
-  findIndexByKey(keys, key) {
-    return keys.findIndex((k) => k.key === key);
+  rankAvailable(keys) {
+    const grouped = /* @__PURE__ */ new Map();
+    for (const key of keys) {
+      const inFlight = this.inFlight.get(key.key) ?? 0;
+      const lastAllocatedAt = this.lastAllocatedAt.get(key.key) ?? 0;
+      const rankKey = `${inFlight}:${key.usageCount}:${lastAllocatedAt}`;
+      const group = grouped.get(rankKey);
+      if (group) {
+        group.push(key);
+      } else {
+        grouped.set(rankKey, [key]);
+      }
+    }
+    return Array.from(grouped.entries()).sort(([a], [b]) => {
+      const [aInFlight, aUsage, aLast] = a.split(":").map(Number);
+      const [bInFlight, bUsage, bLast] = b.split(":").map(Number);
+      if (aInFlight !== bInFlight) return aInFlight - bInFlight;
+      if (aUsage !== bUsage) return aUsage - bUsage;
+      return aLast - bLast;
+    }).flatMap(([, group]) => shuffle(group));
   }
-  /**
-   * Advance pointer to the next available key (round-robin).
-   * Wraps around modulo keys.length.
-   */
-  advancePointer(keys) {
-    const available = this.availableKeys(keys);
-    if (available.length === 0) return;
-    const currentKey = keys[this.pointer];
-    if (currentKey && currentKey.isActive && currentKey.cooldownUntil <= Date.now()) {
+  async clearLease(key) {
+    const keys = await this.getKeys(true);
+    const record = this.findByKey(keys, key);
+    if (!record) {
+      this.releaseLocalTracking(key);
       return;
     }
-    const idx = keys.findIndex((k) => k.key === currentKey?.key);
-    if (idx >= 0) {
-      this.pointer = (idx + 1) % keys.length;
+    const expectedLeaseToken = this.leaseTokens.get(key);
+    if (!expectedLeaseToken || record.leaseToken !== expectedLeaseToken) {
+      this.releaseLocalTracking(key);
+      return;
+    }
+    record.leaseUntil = 0;
+    record.leaseToken = null;
+    try {
+      await this.adapter.updateKey(record, expectedLeaseToken);
+    } finally {
+      this.releaseLocalTracking(key);
+    }
+  }
+  releaseLocalTracking(key) {
+    this.leaseTokens.delete(key);
+    const inFlight = this.inFlight.get(key) ?? 0;
+    if (inFlight <= 1) {
+      this.inFlight.delete(key);
+    } else {
+      this.inFlight.set(key, inFlight - 1);
     }
   }
   // ── Public API ─────────────────────────────────────────────────────
   /**
-   * Allocate `count` available keys using round-robin selection.
-   * Starts from `pointer`, skips unavailable keys, wraps around.
-   * Throws NoAvailableKeyError if zero keys are available.
+   * Allocate up to `count` available keys using load-aware ranking.
+   * Throws NoAvailableKeyError if zero keys are available or the request
+   * asks for more keys than are currently available.
    */
   async allocate(count) {
-    const keys = await this.getKeys();
+    const keys = await this.getKeys(true);
     const available = this.availableKeys(keys);
     if (available.length === 0) {
       throw new NoAvailableKeyError();
     }
-    const result = [];
-    let wrapped = 0;
-    const maxAttempts = keys.length * count;
-    while (result.length < count && wrapped < maxAttempts) {
-      const idx = this.pointer % keys.length;
-      const key = keys[idx];
-      if (key.isActive && key.cooldownUntil <= Date.now()) {
-        result.push(key.key);
-      }
-      this.pointer++;
-      wrapped++;
-      if (this.pointer >= keys.length * 2) {
-        break;
-      }
+    if (count > available.length) {
+      throw new NoAvailableKeyError(
+        `Requested ${count} key(s), but only ${available.length} available in pool`
+      );
     }
-    if (result.length === 0) {
-      throw new NoAvailableKeyError();
+    const ranked = this.rankAvailable(available);
+    const now = Date.now();
+    const result = [];
+    for (const selected of ranked) {
+      if (result.length >= count) break;
+      const leaseUntil = now + this.allocationLeaseMs;
+      const leaseToken = `${selected.id}:${leaseUntil}:${Math.random().toString(36).slice(2)}`;
+      const acquired = await this.adapter.acquireLease(
+        selected.id,
+        leaseUntil,
+        leaseToken,
+        now
+      );
+      if (!acquired) continue;
+      selected.leaseUntil = leaseUntil;
+      selected.leaseToken = leaseToken;
+      const key = selected.key;
+      result.push(key);
+      this.inFlight.set(key, (this.inFlight.get(key) ?? 0) + 1);
+      this.lastAllocatedAt.set(key, now + result.length - 1);
+      this.leaseTokens.set(key, leaseToken);
+    }
+    if (result.length !== count) {
+      for (const key of result) {
+        await this.clearLease(key);
+      }
+      throw new NoAvailableKeyError(
+        `Requested ${count} key(s), but only ${result.length} could be leased`
+      );
     }
     return result;
   }
   /**
    * Release a key after use.
-   * Advances the pointer so the next allocate() gets the next key.
    * @param key - The API key string
    * @param failed - If true, sets cooldown; if false, increments usageCount
    * @param authFailure - If true, uses longer auth cooldown (default: false)
    */
   async release(key, failed, authFailure = false) {
-    const keys = await this.getKeys();
+    const keys = await this.getKeys(true);
     const record = this.findByKey(keys, key);
-    if (!record) return;
+    if (!record) {
+      this.releaseLocalTracking(key);
+      return;
+    }
+    const expectedLeaseToken = this.leaseTokens.get(key);
+    if (!expectedLeaseToken) {
+      this.releaseLocalTracking(key);
+      return;
+    }
+    if (expectedLeaseToken && record.leaseToken !== expectedLeaseToken) {
+      this.releaseLocalTracking(key);
+      return;
+    }
     if (failed) {
       const duration = authFailure ? this.authCooldownMs : this.defaultCooldownMs;
       record.cooldownUntil = Date.now() + duration;
-      this.pointer = (this.findIndexByKey(keys, key) + 1) % keys.length;
     } else {
       record.usageCount += 1;
-      this.pointer = (this.findIndexByKey(keys, key) + 1) % keys.length;
     }
-    await this.adapter.updateKey(record);
+    record.leaseUntil = 0;
+    record.leaseToken = null;
+    try {
+      await this.adapter.updateKey(record, expectedLeaseToken);
+    } finally {
+      this.releaseLocalTracking(key);
+    }
+  }
+  getAllocationLeaseMs() {
+    return this.allocationLeaseMs;
+  }
+  async renewLease(key) {
+    const keys = await this.getKeys(true);
+    const record = this.findByKey(keys, key);
+    const leaseToken = this.leaseTokens.get(key);
+    if (!record || !leaseToken || record.leaseToken !== leaseToken) {
+      this.leaseTokens.delete(key);
+      return false;
+    }
+    const leaseUntil = Date.now() + this.allocationLeaseMs;
+    const renewed = await this.adapter.renewLease(
+      record.id,
+      leaseUntil,
+      leaseToken,
+      Date.now()
+    );
+    if (!renewed) {
+      this.leaseTokens.delete(key);
+      return false;
+    }
+    record.leaseUntil = leaseUntil;
+    return true;
   }
   /**
    * Permanently deactivate a key (e.g., suspended by Google).
    */
   async block(key) {
-    const keys = await this.getKeys();
+    const keys = await this.getKeys(true);
     const record = this.findByKey(keys, key);
     if (!record) return;
     record.isActive = false;
-    await this.adapter.updateKey(record);
+    await this.adapter.updateKey(record, record.leaseToken);
   }
   /**
    * Force-reload keys from storage on next allocate().
@@ -160,13 +264,14 @@ var KeyPool = class {
    * Return all keys with current status (for diagnostics / admin UI).
    */
   async status() {
-    return this.getKeys();
+    return this.getKeys(true);
   }
 };
 
 // src/key-pool/sqlite-adapter.ts
 var SqliteAdapter = class {
   db;
+  leaseColumnsReady = null;
   constructor(db) {
     this.db = db;
   }
@@ -178,26 +283,100 @@ var SqliteAdapter = class {
         key           TEXT    NOT NULL UNIQUE,
         is_active     INTEGER NOT NULL DEFAULT 1,
         cooldown_until INTEGER NOT NULL DEFAULT 0,
+        lease_until   INTEGER NOT NULL DEFAULT 0,
+        lease_token   TEXT,
         usage_count   INTEGER NOT NULL DEFAULT 0
       )
     `).run();
+    try {
+      db.prepare(
+        "ALTER TABLE api_keys ADD COLUMN lease_until INTEGER NOT NULL DEFAULT 0"
+      ).run();
+    } catch {
+    }
+    try {
+      db.prepare("ALTER TABLE api_keys ADD COLUMN lease_token TEXT").run();
+    } catch {
+    }
+  }
+  ensureLeaseColumns() {
+    if (this.leaseColumnsReady === true) return true;
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(api_keys)").all();
+      const hasLeaseUntil = columns.some((column) => column.name === "lease_until");
+      const hasLeaseToken = columns.some((column) => column.name === "lease_token");
+      if (!hasLeaseUntil) {
+        this.db.prepare(
+          "ALTER TABLE api_keys ADD COLUMN lease_until INTEGER NOT NULL DEFAULT 0"
+        ).run();
+      }
+      if (!hasLeaseToken) {
+        this.db.prepare("ALTER TABLE api_keys ADD COLUMN lease_token TEXT").run();
+      }
+      this.leaseColumnsReady = true;
+      return true;
+    } catch (error) {
+      this.leaseColumnsReady = null;
+      throw new Error(
+        `ai-core key pool requires lease_until and lease_token columns: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
   async getKeys() {
+    this.ensureLeaseColumns();
     const rows = this.db.prepare(
-      "SELECT id, key, is_active, cooldown_until, usage_count FROM api_keys"
+      "SELECT id, key, is_active, cooldown_until, lease_until, lease_token, usage_count FROM api_keys"
     ).all();
     return rows.map(rowToApiKey);
   }
-  async updateKey(key) {
+  async acquireLease(keyId, leaseUntil, leaseToken, now) {
+    this.ensureLeaseColumns();
+    const result = this.db.prepare(
+      `UPDATE api_keys
+         SET lease_until = ?, lease_token = ?
+         WHERE id = ? AND is_active = 1 AND cooldown_until <= ? AND lease_until <= ?`
+    ).run(leaseUntil, leaseToken, keyId, now, now);
+    return (result.changes ?? 0) > 0;
+  }
+  async renewLease(keyId, leaseUntil, leaseToken, now) {
+    this.ensureLeaseColumns();
+    const result = this.db.prepare(
+      `UPDATE api_keys
+         SET lease_until = ?
+         WHERE id = ? AND lease_token = ? AND lease_until > ?`
+    ).run(leaseUntil, keyId, leaseToken, now);
+    return (result.changes ?? 0) > 0;
+  }
+  async updateKey(key, expectedLeaseToken) {
+    this.ensureLeaseColumns();
+    if (expectedLeaseToken === void 0) {
+      this.db.prepare(
+        `UPDATE api_keys
+           SET is_active = ?, cooldown_until = ?, lease_until = ?, lease_token = ?, usage_count = ?
+           WHERE id = ?`
+      ).run(
+        key.isActive ? 1 : 0,
+        key.cooldownUntil,
+        key.leaseUntil,
+        key.leaseToken,
+        key.usageCount,
+        key.id
+      );
+      return;
+    }
     this.db.prepare(
       `UPDATE api_keys
-         SET is_active = ?, cooldown_until = ?, usage_count = ?
-         WHERE id = ?`
+         SET is_active = ?, cooldown_until = ?, lease_until = ?, lease_token = ?, usage_count = ?
+         WHERE id = ? AND ((? IS NULL AND lease_token IS NULL) OR lease_token = ?)`
     ).run(
       key.isActive ? 1 : 0,
       key.cooldownUntil,
+      key.leaseUntil,
+      key.leaseToken,
       key.usageCount,
-      key.id
+      key.id,
+      expectedLeaseToken,
+      expectedLeaseToken
     );
   }
   /** Insert a new key (convenience helper). */
@@ -213,6 +392,8 @@ function rowToApiKey(row) {
     key: row.key,
     isActive: row.is_active === 1,
     cooldownUntil: row.cooldown_until,
+    leaseUntil: row.lease_until ?? 0,
+    leaseToken: row.lease_token ?? null,
     usageCount: row.usage_count
   };
 }
@@ -370,6 +551,31 @@ var GeminiClient = class {
     this.pool = pool;
     this.maxRetries = options.maxRetries ?? 3;
   }
+  startLeaseHeartbeat(apiKey) {
+    let leaseError = null;
+    const intervalMs = Math.max(
+      250,
+      Math.min(6e4, Math.floor(this.pool.getAllocationLeaseMs() / 2))
+    );
+    const timer = setInterval(() => {
+      this.pool.renewLease(apiKey).then((renewed) => {
+        if (!renewed) {
+          leaseError = new Error(`Lost key lease for ${apiKey}`);
+          clearInterval(timer);
+        }
+      }).catch((error) => {
+        leaseError = error instanceof Error ? error : new Error(String(error));
+        clearInterval(timer);
+      });
+    }, intervalMs);
+    if (typeof timer.unref === "function") {
+      timer.unref();
+    }
+    return {
+      stop: () => clearInterval(timer),
+      getError: () => leaseError
+    };
+  }
   /**
    * Generate content (non-streaming).
    * Automatically allocates a key, calls Gemini, releases the key.
@@ -379,10 +585,17 @@ var GeminiClient = class {
     let currentKey = initialKey;
     let failed = false;
     let authFailure = false;
+    let heartbeatKey = initialKey;
+    let heartbeat = this.startLeaseHeartbeat(initialKey);
     try {
       const response = await withRetry(
         async (apiKey) => {
           currentKey = apiKey;
+          if (apiKey !== heartbeatKey) {
+            heartbeat.stop();
+            heartbeat = this.startLeaseHeartbeat(apiKey);
+            heartbeatKey = apiKey;
+          }
           const genai = new import_generative_ai.GoogleGenerativeAI(apiKey);
           const model = genai.getGenerativeModel({
             model: params.model,
@@ -400,9 +613,13 @@ var GeminiClient = class {
               history: buildHistory(params.history)
             });
             const result = await chat.sendMessage(params.prompt);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           } else {
             const result = await model.generateContent(content);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           }
         },
@@ -410,7 +627,7 @@ var GeminiClient = class {
         {
           maxRetries: this.maxRetries,
           rotateKey: async () => {
-            await this.pool.release(currentKey, true);
+            await this.pool.release(currentKey, true, authFailure);
             const [nextKey] = await this.pool.allocate(1);
             return nextKey;
           },
@@ -431,6 +648,7 @@ var GeminiClient = class {
       }
       throw err;
     } finally {
+      heartbeat.stop();
       if (failed && currentKey !== initialKey) {
         await this.pool.release(currentKey, true, authFailure).catch(() => {
         });
@@ -453,6 +671,7 @@ var GeminiClient = class {
     const [key] = await this.pool.allocate(1);
     let chunksReceived = 0;
     let failed = false;
+    const heartbeat = this.startLeaseHeartbeat(key);
     try {
       const genai = new import_generative_ai.GoogleGenerativeAI(key);
       const model = genai.getGenerativeModel({
@@ -465,6 +684,11 @@ var GeminiClient = class {
       const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
       const result = await model.generateContentStream(content);
       for await (const chunk of result.stream) {
+        const leaseError = heartbeat.getError();
+        if (leaseError) {
+          failed = true;
+          throw new StreamInterruptedError(chunksReceived, leaseError);
+        }
         const text = chunk.text();
         if (text) {
           chunksReceived++;
@@ -473,8 +697,12 @@ var GeminiClient = class {
       }
     } catch (err) {
       failed = true;
+      if (err instanceof StreamInterruptedError) {
+        throw err;
+      }
       throw new StreamInterruptedError(chunksReceived, err);
     } finally {
+      heartbeat.stop();
       await this.pool.release(key, failed).catch(() => {
       });
     }

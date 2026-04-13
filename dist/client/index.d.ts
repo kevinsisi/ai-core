@@ -1,4 +1,4 @@
-import { K as KeyPool } from '../key-pool-CMqHh8NL.js';
+import { K as KeyPool } from '../key-pool-Cpl1ch9D.js';
 import * as _google_generative_ai from '@google/generative-ai';
 
 interface ChatMessage {
@@ -67,6 +67,7 @@ declare class GeminiClient {
     private readonly pool;
     private readonly maxRetries;
     constructor(pool: KeyPool, options?: ClientOptions);
+    private startLeaseHeartbeat;
     /**
      * Generate content (non-streaming).
      * Automatically allocates a key, calls Gemini, releases the key.
