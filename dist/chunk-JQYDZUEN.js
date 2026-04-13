@@ -1,6 +1,6 @@
 import {
   NoAvailableKeyError
-} from "./chunk-YWG7PDH5.js";
+} from "./chunk-NHGYIXGT.js";
 
 // src/key-pool/key-pool.ts
 function shuffle(items) {
@@ -206,6 +206,9 @@ var KeyPool = class {
     record.leaseUntil = leaseUntil;
     return true;
   }
+  async releaseLease(key) {
+    await this.clearLease(key);
+  }
   /**
    * Permanently deactivate a key (e.g., suspended by Google).
    */
@@ -364,4 +367,4 @@ export {
   KeyPool,
   SqliteAdapter
 };
-//# sourceMappingURL=chunk-NC6Q4K4H.js.map
+//# sourceMappingURL=chunk-JQYDZUEN.js.map

@@ -247,6 +247,10 @@ export class KeyPool {
     return true;
   }
 
+  async releaseLease(key: string): Promise<void> {
+    await this.clearLease(key);
+  }
+
   /**
    * Permanently deactivate a key (e.g., suspended by Google).
    */
