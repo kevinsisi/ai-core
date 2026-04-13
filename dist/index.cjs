@@ -244,6 +244,9 @@ var KeyPool = class {
     record.leaseUntil = leaseUntil;
     return true;
   }
+  async releaseLease(key) {
+    await this.clearLease(key);
+  }
   /**
    * Permanently deactivate a key (e.g., suspended by Google).
    */
