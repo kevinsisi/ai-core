@@ -14,6 +14,8 @@ function makeKey(
     key,
     isActive: true,
     cooldownUntil: 0,
+    leaseUntil: 0,
+    leaseToken: null,
     usageCount: 0,
     ...overrides,
   };
@@ -25,6 +27,29 @@ function makeAdapter(keys: ApiKey[]): StorageAdapter & { updated: ApiKey[] } {
     updated,
     async getKeys() {
       return [...keys];
+    },
+    async acquireLease(
+      keyId: number,
+      leaseUntil: number,
+      leaseToken: string,
+      now: number
+    ) {
+      const record = keys.find((key) => key.id === keyId);
+      if (!record) return false;
+      if (!record.isActive || record.cooldownUntil > now || record.leaseUntil > now) {
+        return false;
+      }
+      record.leaseUntil = leaseUntil;
+      record.leaseToken = leaseToken;
+      updated.push({ ...record });
+      return true;
+    },
+    async renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number) {
+      const record = keys.find((key) => key.id === keyId);
+      if (!record || record.leaseToken !== leaseToken || record.leaseUntil <= now) return false;
+      record.leaseUntil = leaseUntil;
+      updated.push({ ...record });
+      return true;
     },
     async updateKey(key: ApiKey) {
       // Update in-place so subsequent getKeys reflects changes
@@ -92,23 +117,6 @@ describe("KeyPool", () => {
       await expect(pool.allocate(3)).rejects.toThrow(NoAvailableKeyError);
     });
 
-    it("uses shuffle so different keys are returned across calls", async () => {
-      const keys = Array.from({ length: 10 }, (_, i) =>
-        makeKey(i + 1, `key-${i}`)
-      );
-      const adapter = makeAdapter(keys);
-      const pool = new KeyPool(adapter);
-
-      const results = new Set<string>();
-      for (let i = 0; i < 20; i++) {
-        pool.invalidate(); // force reload to get fresh shuffle
-        const [k] = await pool.allocate(1);
-        results.add(k);
-      }
-      // With 10 keys and 20 draws, statistically we expect > 1 unique key
-      expect(results.size).toBeGreaterThan(1);
-    });
-
     it("prefers less-used keys before hotter ones", async () => {
       vi.spyOn(Math, "random").mockReturnValue(0);
       const adapter = makeAdapter([
@@ -139,6 +147,31 @@ describe("KeyPool", () => {
       expect(new Set([first[0], second[0], third[0]])).toEqual(
         new Set(["key-a", "key-b", "key-c"])
       );
+
+      await expect(pool.allocate(1)).rejects.toThrow(NoAvailableKeyError);
+    });
+
+    it("persists a lease while a key is checked out", async () => {
+      const adapter = makeAdapter([makeKey(1, "key-a"), makeKey(2, "key-b")]);
+      const pool = new KeyPool(adapter, { allocationLeaseMs: 1_000 });
+
+      const [allocated] = await pool.allocate(1);
+
+      const leasedRecord = adapter.updated.find((record) => record.key === allocated);
+      expect(leasedRecord?.leaseUntil ?? 0).toBeGreaterThan(Date.now());
+    });
+
+    it("prevents two pool instances sharing one adapter from leasing the same key", async () => {
+      const adapter = makeAdapter([makeKey(1, "key-a"), makeKey(2, "key-b")]);
+      const firstPool = new KeyPool(adapter);
+      const secondPool = new KeyPool(adapter);
+
+      const [first, second] = await Promise.all([
+        firstPool.allocate(1),
+        secondPool.allocate(1),
+      ]);
+
+      expect(new Set([first[0], second[0]])).toEqual(new Set(["key-a", "key-b"]));
     });
 
     it("refreshes storage state before allocation so persisted usage can rebalance picks", async () => {
@@ -146,6 +179,27 @@ describe("KeyPool", () => {
       const adapter = {
         async getKeys() {
           return keys.map((key) => ({ ...key }));
+        },
+        async acquireLease(
+          keyId: number,
+          leaseUntil: number,
+          leaseToken: string,
+          now: number
+        ) {
+          const record = keys.find((item) => item.id === keyId);
+          if (!record) return false;
+          if (!record.isActive || record.cooldownUntil > now || record.leaseUntil > now) {
+            return false;
+          }
+          record.leaseUntil = leaseUntil;
+          record.leaseToken = leaseToken;
+          return true;
+        },
+        async renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number) {
+          const record = keys.find((item) => item.id === keyId);
+          if (!record || record.leaseToken !== leaseToken || record.leaseUntil <= now) return false;
+          record.leaseUntil = leaseUntil;
+          return true;
         },
         async updateKey(key: ApiKey) {
           const idx = keys.findIndex((item) => item.id === key.id);
@@ -161,6 +215,52 @@ describe("KeyPool", () => {
 
       expect(first).not.toBe(second);
     });
+
+    it("clears leased keys correctly with compare-and-set adapters", async () => {
+      const keys = [makeKey(1, "key-a")];
+      const adapter = {
+        async getKeys() {
+          return keys.map((key) => ({ ...key }));
+        },
+        async acquireLease(
+          keyId: number,
+          leaseUntil: number,
+          leaseToken: string,
+          now: number
+        ) {
+          const record = keys.find((item) => item.id === keyId);
+          if (!record) return false;
+          if (!record.isActive || record.cooldownUntil > now || record.leaseUntil > now) {
+            return false;
+          }
+          record.leaseUntil = leaseUntil;
+          record.leaseToken = leaseToken;
+          return true;
+        },
+        async renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number) {
+          const record = keys.find((item) => item.id === keyId);
+          if (!record || record.leaseToken !== leaseToken || record.leaseUntil <= now) return false;
+          record.leaseUntil = leaseUntil;
+          return true;
+        },
+        async updateKey(key: ApiKey, expectedLeaseToken?: string | null) {
+          const idx = keys.findIndex((item) => item.id === key.id);
+          if (idx < 0) return;
+          const current = keys[idx];
+          const matches =
+            (expectedLeaseToken == null && current.leaseToken == null) ||
+            current.leaseToken === expectedLeaseToken;
+          if (matches) keys[idx] = { ...key };
+        },
+      } satisfies StorageAdapter;
+      const pool = new KeyPool(adapter, { allocationLeaseMs: 1_000 });
+
+      const [first] = await pool.allocate(1);
+      await pool.release(first, false);
+      const [second] = await pool.allocate(1);
+
+      expect(second).toBe("key-a");
+    });
   });
 
   describe("release (success)", () => {
@@ -169,11 +269,12 @@ describe("KeyPool", () => {
       const adapter = makeAdapter([record]);
       const pool = new KeyPool(adapter);
 
+      await pool.allocate(1);
       await pool.release("key-a", false);
 
-      expect(adapter.updated).toHaveLength(1);
-      expect(adapter.updated[0].usageCount).toBe(1);
-      expect(adapter.updated[0].cooldownUntil).toBe(0);
+      expect(adapter.updated.at(-1)?.usageCount).toBe(1);
+      expect(adapter.updated.at(-1)?.cooldownUntil).toBe(0);
+      expect(adapter.updated.at(-1)?.leaseUntil).toBe(0);
     });
   });
 
@@ -184,12 +285,13 @@ describe("KeyPool", () => {
       const pool = new KeyPool(adapter, { defaultCooldownMs: 60_000 });
       const before = Date.now();
 
+      await pool.allocate(1);
       await pool.release("key-a", true);
 
-      expect(adapter.updated).toHaveLength(1);
-      const updatedCooldown = adapter.updated[0].cooldownUntil;
+      const updatedCooldown = adapter.updated.at(-1)?.cooldownUntil ?? 0;
       expect(updatedCooldown).toBeGreaterThanOrEqual(before + 59_000);
       expect(updatedCooldown).toBeLessThanOrEqual(before + 61_000);
+      expect(adapter.updated.at(-1)?.leaseUntil).toBe(0);
     });
 
     it("uses authCooldownMs for auth failures", async () => {
@@ -198,10 +300,12 @@ describe("KeyPool", () => {
       const pool = new KeyPool(adapter, { authCooldownMs: 30 * 60_000 });
       const before = Date.now();
 
+      await pool.allocate(1);
       await pool.release("key-a", true, true);
 
-      const updatedCooldown = adapter.updated[0].cooldownUntil;
+      const updatedCooldown = adapter.updated.at(-1)?.cooldownUntil ?? 0;
       expect(updatedCooldown).toBeGreaterThanOrEqual(before + 29 * 60_000);
+      expect(adapter.updated.at(-1)?.leaseUntil).toBe(0);
     });
   });
 });

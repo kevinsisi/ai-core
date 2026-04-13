@@ -36,7 +36,15 @@ vi.mock("@google/generative-ai", () => {
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function makeKey(id: number, key: string): ApiKey {
-  return { id, key, isActive: true, cooldownUntil: 0, usageCount: 0 };
+  return {
+    id,
+    key,
+    isActive: true,
+    cooldownUntil: 0,
+    leaseUntil: 0,
+    leaseToken: null,
+    usageCount: 0,
+  };
 }
 
 function makePool(keys: ApiKey[]): KeyPool {
@@ -44,6 +52,27 @@ function makePool(keys: ApiKey[]): KeyPool {
   const adapter: StorageAdapter = {
     async getKeys() {
       return [...internalKeys];
+    },
+    async acquireLease(
+      keyId: number,
+      leaseUntil: number,
+      leaseToken: string,
+      now: number
+    ) {
+      const record = internalKeys.find((key) => key.id === keyId);
+      if (!record) return false;
+      if (!record.isActive || record.cooldownUntil > now || record.leaseUntil > now) {
+        return false;
+      }
+      record.leaseUntil = leaseUntil;
+      record.leaseToken = leaseToken;
+      return true;
+    },
+    async renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number) {
+      const record = internalKeys.find((key) => key.id === keyId);
+      if (!record || record.leaseToken !== leaseToken || record.leaseUntil <= now) return false;
+      record.leaseUntil = leaseUntil;
+      return true;
     },
     async updateKey(k: ApiKey) {
       const idx = internalKeys.findIndex((x) => x.id === k.id);

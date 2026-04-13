@@ -48,37 +48,23 @@ declare class KeyPool {
     private readonly allocationLeaseMs;
     /** In-memory cache; reloaded on first use or after invalidation */
     private cache;
-<<<<<<<< HEAD:dist/key-pool-DtsOF5Aj.d.ts
-    /** Active allocations not yet released. Lower is better when picking keys. */
-    private readonly inFlight;
-    /** Last allocation timestamp by key to avoid hammering the same key repeatedly. */
-    private readonly lastAllocatedAt;
-========
     /** Active allocations in the current process; fewer is better. */
     private readonly inFlight;
     /** Last allocation timestamp to avoid repeatedly hammering the same key. */
     private readonly lastAllocatedAt;
     /** Lease token held by this process for each allocated key. */
     private readonly leaseTokens;
->>>>>>>> main:dist/key-pool-Cpl1ch9D.d.ts
     constructor(adapter: StorageAdapter, options?: KeyPoolOptions);
     private getKeys;
     private availableKeys;
     private findByKey;
     private rankAvailable;
-<<<<<<<< HEAD:dist/key-pool-DtsOF5Aj.d.ts
-    /**
-     * Allocate up to `count` available keys using load-aware ranking.
-     * Throws NoAvailableKeyError if zero keys are available or if `count`
-     * exceeds the number of currently available keys.
-========
     private clearLease;
     private releaseLocalTracking;
     /**
      * Allocate up to `count` available keys using load-aware ranking.
      * Throws NoAvailableKeyError if zero keys are available or the request
      * asks for more keys than are currently available.
->>>>>>>> main:dist/key-pool-Cpl1ch9D.d.ts
      */
     allocate(count: number): Promise<string[]>;
     /**

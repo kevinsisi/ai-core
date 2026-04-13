@@ -1,6 +1,10 @@
 import {
   withRetry
+<<<<<<<< HEAD:dist/chunk-DMED5ZMM.js
 } from "./chunk-4WDCC5XT.js";
+========
+} from "./chunk-BHWTHXG6.js";
+>>>>>>>> main:dist/chunk-5XCU6LWV.js
 
 // src/client/gemini-client.ts
 import { readFileSync } from "fs";
@@ -58,6 +62,31 @@ var GeminiClient = class {
     this.pool = pool;
     this.maxRetries = options.maxRetries ?? 3;
   }
+  startLeaseHeartbeat(apiKey) {
+    let leaseError = null;
+    const intervalMs = Math.max(
+      250,
+      Math.min(6e4, Math.floor(this.pool.getAllocationLeaseMs() / 2))
+    );
+    const timer = setInterval(() => {
+      this.pool.renewLease(apiKey).then((renewed) => {
+        if (!renewed) {
+          leaseError = new Error(`Lost key lease for ${apiKey}`);
+          clearInterval(timer);
+        }
+      }).catch((error) => {
+        leaseError = error instanceof Error ? error : new Error(String(error));
+        clearInterval(timer);
+      });
+    }, intervalMs);
+    if (typeof timer.unref === "function") {
+      timer.unref();
+    }
+    return {
+      stop: () => clearInterval(timer),
+      getError: () => leaseError
+    };
+  }
   /**
    * Generate content (non-streaming).
    * Automatically allocates a key, calls Gemini, releases the key.
@@ -67,10 +96,17 @@ var GeminiClient = class {
     let currentKey = initialKey;
     let failed = false;
     let authFailure = false;
+    let heartbeatKey = initialKey;
+    let heartbeat = this.startLeaseHeartbeat(initialKey);
     try {
       const response = await withRetry(
         async (apiKey) => {
           currentKey = apiKey;
+          if (apiKey !== heartbeatKey) {
+            heartbeat.stop();
+            heartbeat = this.startLeaseHeartbeat(apiKey);
+            heartbeatKey = apiKey;
+          }
           const genai = new GoogleGenerativeAI(apiKey);
           const model = genai.getGenerativeModel({
             model: params.model,
@@ -88,9 +124,13 @@ var GeminiClient = class {
               history: buildHistory(params.history)
             });
             const result = await chat.sendMessage(params.prompt);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           } else {
             const result = await model.generateContent(content);
+            const leaseError = heartbeat.getError();
+            if (leaseError) throw leaseError;
             return result.response;
           }
         },
@@ -98,7 +138,7 @@ var GeminiClient = class {
         {
           maxRetries: this.maxRetries,
           rotateKey: async () => {
-            await this.pool.release(currentKey, true);
+            await this.pool.release(currentKey, true, authFailure);
             const [nextKey] = await this.pool.allocate(1);
             return nextKey;
           },
@@ -119,6 +159,7 @@ var GeminiClient = class {
       }
       throw err;
     } finally {
+      heartbeat.stop();
       if (failed && currentKey !== initialKey) {
         await this.pool.release(currentKey, true, authFailure).catch(() => {
         });
@@ -141,6 +182,7 @@ var GeminiClient = class {
     const [key] = await this.pool.allocate(1);
     let chunksReceived = 0;
     let failed = false;
+    const heartbeat = this.startLeaseHeartbeat(key);
     try {
       const genai = new GoogleGenerativeAI(key);
       const model = genai.getGenerativeModel({
@@ -153,6 +195,11 @@ var GeminiClient = class {
       const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
       const result = await model.generateContentStream(content);
       for await (const chunk of result.stream) {
+        const leaseError = heartbeat.getError();
+        if (leaseError) {
+          failed = true;
+          throw new StreamInterruptedError(chunksReceived, leaseError);
+        }
         const text = chunk.text();
         if (text) {
           chunksReceived++;
@@ -161,8 +208,12 @@ var GeminiClient = class {
       }
     } catch (err) {
       failed = true;
+      if (err instanceof StreamInterruptedError) {
+        throw err;
+      }
       throw new StreamInterruptedError(chunksReceived, err);
     } finally {
+      heartbeat.stop();
       await this.pool.release(key, failed).catch(() => {
       });
     }
@@ -173,4 +224,8 @@ export {
   StreamInterruptedError,
   GeminiClient
 };
+<<<<<<<< HEAD:dist/chunk-DMED5ZMM.js
 //# sourceMappingURL=chunk-DMED5ZMM.js.map
+========
+//# sourceMappingURL=chunk-5XCU6LWV.js.map
+>>>>>>>> main:dist/chunk-5XCU6LWV.js

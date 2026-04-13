@@ -1,5 +1,5 @@
-import { S as StorageAdapter, A as ApiKey } from '../key-pool-DtsOF5Aj.cjs';
-export { K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError } from '../key-pool-DtsOF5Aj.cjs';
+import { S as StorageAdapter, A as ApiKey } from '../key-pool-Cpl1ch9D.cjs';
+export { K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError } from '../key-pool-Cpl1ch9D.cjs';
 
 /**
  * SQLite reference implementation of StorageAdapter.
@@ -12,6 +12,8 @@ export { K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError } from '../
  *     key          TEXT    NOT NULL UNIQUE,
  *     is_active    INTEGER NOT NULL DEFAULT 1,
  *     cooldown_until INTEGER NOT NULL DEFAULT 0,
+ *     lease_until  INTEGER NOT NULL DEFAULT 0,
+ *     lease_token  TEXT,
  *     usage_count  INTEGER NOT NULL DEFAULT 0
  *   );
  *
@@ -19,11 +21,15 @@ export { K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError } from '../
  */
 declare class SqliteAdapter implements StorageAdapter {
     private readonly db;
+    private leaseColumnsReady;
     constructor(db: SqliteDatabase);
     /** Create the api_keys table if it doesn't exist */
     static createTable(db: SqliteDatabase): void;
+    private ensureLeaseColumns;
     getKeys(): Promise<ApiKey[]>;
-    updateKey(key: ApiKey): Promise<void>;
+    acquireLease(keyId: number, leaseUntil: number, leaseToken: string, now: number): Promise<boolean>;
+    renewLease(keyId: number, leaseUntil: number, leaseToken: string, now: number): Promise<boolean>;
+    updateKey(key: ApiKey, expectedLeaseToken?: string | null): Promise<void>;
     /** Insert a new key (convenience helper). */
     insertKey(key: string): void;
 }
