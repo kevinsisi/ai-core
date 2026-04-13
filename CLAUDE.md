@@ -185,6 +185,40 @@ npm install @kevinsisi/ai-core
 
 ---
 
+## Key-Manager Integration Pattern
+
+`ai-core` 提供 KeyPool 基礎設施，消費者服務可在此之上整合外部 key-manager 服務，實現集中式 key 管理。sheet-to-car 為參考實作（`src/routes/keys.ts`）。
+
+### 整合流程
+
+| 操作 | 方向 | 說明 |
+|---|---|---|
+| `syncFromManager` | key-manager → 消費者 | 從 `{key_manager_url}/api/keys/export` 拉取 available keys，透過 `addApiKey()` 寫入本地 pool |
+| `testAllKeys` | 消費者 → Gemini API | 逐一對 pool 中的 active key 打 `generateContent`，依結果更新 `api_keys.cooldown_until` **並同步清除 `api_key_cooldowns`** |
+| `reportToManager` | 消費者 → key-manager | 將本地 key 狀態（cooldown、失效）回報給 key-manager（依 key-manager 實作定義） |
+| `getKeyStatus` | 消費者讀 pool | 透過 `KeyPool.status()` 或 `getKeyList()` 取得每把 key 的 available / cooldown / leased 狀態 |
+
+### 重要規則：test 成功後必須雙清
+
+`syncKeyPoolState()` 使用 `MAX(api_keys.cooldown_until, api_key_cooldowns.cooldown_until)` 合併 cooldown，因此 test 成功時**必須同時清除兩張表**：
+
+```ts
+db.prepare('UPDATE api_keys SET cooldown_until = 0 WHERE key = ?').run(key);
+db.prepare('DELETE FROM api_key_cooldowns WHERE api_key_suffix = ?').run(key.slice(-4));
+```
+
+只更新 `api_keys` 不夠 — `api_key_cooldowns` 的舊值會在 `invalidateKeyCache()` 觸發 `syncKeyPoolState()` 時把 cooldown 還原。
+
+### KeyPool.getAllocationLeaseMs()
+
+```ts
+const leaseMs = pool.getAllocationLeaseMs(); // 取得目前 allocationLeaseMs 設定值
+```
+
+供消費者在計算 lease 剩餘時間或記錄 lease 策略時使用。
+
+---
+
 ## Lint & 格式化
 
 ```bash
