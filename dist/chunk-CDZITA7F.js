@@ -1,6 +1,6 @@
 import {
   withRetry
-} from "./chunk-BHWTHXG6.js";
+} from "./chunk-6YVUQYI5.js";
 
 // src/client/gemini-client.ts
 import { readFileSync } from "fs";
@@ -220,4 +220,4 @@ export {
   StreamInterruptedError,
   GeminiClient
 };
-//# sourceMappingURL=chunk-5XCU6LWV.js.map
+//# sourceMappingURL=chunk-CDZITA7F.js.map

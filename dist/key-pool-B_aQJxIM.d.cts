@@ -76,6 +76,7 @@ declare class KeyPool {
     release(key: string, failed: boolean, authFailure?: boolean): Promise<void>;
     getAllocationLeaseMs(): number;
     renewLease(key: string): Promise<boolean>;
+    releaseLease(key: string): Promise<void>;
     /**
      * Permanently deactivate a key (e.g., suspended by Google).
      */
