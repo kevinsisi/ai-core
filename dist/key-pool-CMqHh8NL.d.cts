@@ -37,18 +37,27 @@ declare class KeyPool {
     private readonly authCooldownMs;
     /** In-memory cache; reloaded on first use or after invalidation */
     private cache;
+    /** Round-robin pointer — index into the full keys array */
+    private pointer;
     constructor(adapter: StorageAdapter, options?: KeyPoolOptions);
     private getKeys;
     private availableKeys;
     private findByKey;
+    private findIndexByKey;
     /**
-     * Allocate up to `count` available keys using shuffle-based selection.
-     * Returns fewer than `count` if the pool is smaller.
+     * Advance pointer to the next available key (round-robin).
+     * Wraps around modulo keys.length.
+     */
+    private advancePointer;
+    /**
+     * Allocate `count` available keys using round-robin selection.
+     * Starts from `pointer`, skips unavailable keys, wraps around.
      * Throws NoAvailableKeyError if zero keys are available.
      */
     allocate(count: number): Promise<string[]>;
     /**
      * Release a key after use.
+     * Advances the pointer so the next allocate() gets the next key.
      * @param key - The API key string
      * @param failed - If true, sets cooldown; if false, increments usageCount
      * @param authFailure - If true, uses longer auth cooldown (default: false)

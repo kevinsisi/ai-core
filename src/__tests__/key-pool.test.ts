@@ -87,21 +87,65 @@ describe("KeyPool", () => {
       keys.forEach((k) => expect(["key-a", "key-b"]).toContain(k));
     });
 
-    it("uses shuffle so different keys are returned across calls", async () => {
+    it("uses round-robin so keys are returned in sequence", async () => {
       const keys = Array.from({ length: 10 }, (_, i) =>
         makeKey(i + 1, `key-${i}`)
       );
       const adapter = makeAdapter(keys);
       const pool = new KeyPool(adapter);
 
-      const results = new Set<string>();
-      for (let i = 0; i < 20; i++) {
-        pool.invalidate(); // force reload to get fresh shuffle
+      const results: string[] = [];
+      for (let i = 0; i < 10; i++) {
         const [k] = await pool.allocate(1);
-        results.add(k);
+        results.push(k);
       }
-      // With 10 keys and 20 draws, statistically we expect > 1 unique key
-      expect(results.size).toBeGreaterThan(1);
+
+      expect(results).toEqual([
+        "key-0", "key-1", "key-2", "key-3", "key-4",
+        "key-5", "key-6", "key-7", "key-8", "key-9",
+      ]);
+    });
+
+    it("wraps around after completing one round", async () => {
+      const keys = [
+        makeKey(1, "key-a"),
+        makeKey(2, "key-b"),
+      ];
+      const adapter = makeAdapter(keys);
+      const pool = new KeyPool(adapter);
+
+      expect((await pool.allocate(1))[0]).toBe("key-a");
+      expect((await pool.allocate(1))[0]).toBe("key-b");
+      expect((await pool.allocate(1))[0]).toBe("key-a");
+      expect((await pool.allocate(1))[0]).toBe("key-b");
+    });
+
+    it("skips unavailable keys and advances pointer", async () => {
+      const keys = [
+        makeKey(1, "key-a"),
+        makeKey(2, "key-b", { cooldownUntil: Date.now() + 60_000 }),
+        makeKey(3, "key-c"),
+      ];
+      const adapter = makeAdapter(keys);
+      const pool = new KeyPool(adapter);
+
+      expect((await pool.allocate(1))[0]).toBe("key-a");
+      expect((await pool.allocate(1))[0]).toBe("key-c");
+      expect((await pool.allocate(1))[0]).toBe("key-a");
+    });
+
+    it("advances pointer on release so next allocate gets next key", async () => {
+      const keys = [
+        makeKey(1, "key-a"),
+        makeKey(2, "key-b"),
+      ];
+      const adapter = makeAdapter(keys);
+      const pool = new KeyPool(adapter);
+
+      await pool.release("key-a", false);
+      expect((await pool.allocate(1))[0]).toBe("key-b");
+      await pool.release("key-b", false);
+      expect((await pool.allocate(1))[0]).toBe("key-a");
     });
   });
 
