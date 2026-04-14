@@ -38,18 +38,20 @@ const openAIModels = [
 
 export const builtInProviders: ProviderDefinition[] = [
   {
-    id: ProviderID.Gemini,
-    name: "Gemini",
-    authTypes: ["pool"],
-    models: geminiModels,
-  },
-  {
     id: ProviderID.OpenAI,
     name: "OpenAI",
     authTypes: ["api"],
     models: openAIModels,
   },
+  {
+    id: ProviderID.Gemini,
+    name: "Gemini",
+    authTypes: ["pool"],
+    models: geminiModels,
+  },
 ];
+
+export const defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini] as const;
 
 export function getBuiltInProvider(providerID: string) {
   return builtInProviders.find((provider) => provider.id === providerID);

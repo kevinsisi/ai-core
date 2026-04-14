@@ -51,6 +51,7 @@ export type {
 export {
   ProviderID,
   builtInProviders,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
   ProviderRouter,

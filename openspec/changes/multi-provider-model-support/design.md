@@ -18,9 +18,9 @@ This change introduces those architectural layers into ai-core.
 
 ## Goals / Non-Goals
 
-**Goals**
 - Add provider and model abstractions to ai-core
-- Keep Gemini as the default built-in provider
+- Make OpenAI the default preferred provider for provider-aware routing
+- Keep Gemini as the compatibility and backup provider path
 - Design for OpenAI as the first additional provider target
 - Support provider-specific auth and capability modeling
 - Add routing policy primitives that consumers can use for provider/model fallback
@@ -98,9 +98,9 @@ Important rule:
 - cross-model and cross-provider fallback must be policy-driven and explicit
 - existing Gemini-first APIs must preserve the current no-silent-fallback contract unless the caller opts into provider-aware routing
 
-### D6: Preserve Gemini compatibility during migration
+### D6: Prefer OpenAI by default while preserving Gemini compatibility
 
-Existing Gemini consumers should continue working while the provider-aware architecture is added.
+Provider-aware routing should prefer OpenAI by default, while existing Gemini consumers should continue working during the migration.
 
 Reason:
 - ai-core is already used by multiple HomeProject repos
@@ -131,7 +131,8 @@ Migration expectation:
 
 The first implementation phase should include:
 - provider/model schema
-- Gemini provider adapter as a pool-backed compatibility layer
+- OpenAI preferred-provider routing default
+- Gemini provider adapter as a pool-backed compatibility layer and backup path
 - OpenAI provider adapter with text-only capabilities in phase 1
 - minimal provider routing policy with explicit opt-in fallback controls
 - compatibility layer for existing Gemini consumers

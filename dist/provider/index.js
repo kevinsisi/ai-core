@@ -4,9 +4,10 @@ import {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "../chunk-OGZARUPK.js";
+} from "../chunk-IS74WYMA.js";
 import "../chunk-QZBKFRLG.js";
 import "../chunk-6YVUQYI5.js";
 import "../chunk-NHGYIXGT.js";
@@ -16,6 +17,7 @@ export {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
 };

@@ -2,7 +2,7 @@
 
 ## 專案用途
 
-共用 AI 基礎模組，供 HomeProject 各服務引用。提供 Gemini API key pool、retry 邏輯、以及 GeminiClient 封裝。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
+共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware runtime primitives、OpenAI-first routing foundation、Gemini 相容層、retry 邏輯，以及 GeminiClient 封裝。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
 
 **消費者專案：** mind-diary、project-bridge、auto-spec-test、sheet-to-car
 
@@ -103,7 +103,7 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/client` | GeminiClient, StreamInterruptedError, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 | `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
-| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, ProviderRouter, pool-backed Gemini adapter, OpenAI adapter |
+| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, ProviderRouter, pool-backed Gemini adapter, OpenAI adapter |
 
 ---
 
@@ -123,17 +123,20 @@ const { text } = await client.generateContent({
 - 嚴格 TypeScript：`strict: true`，禁止 `any`（使用 `unknown` 或明確型別）
 - 所有公開 API 必須有明確的型別定義，不可依賴推斷的回傳型別
 
-### 模型選擇
-- **統一使用 `gemini-2.5-flash`** 作為預設及推薦模型
-- 不可 hardcode 其他模型名稱於函式庫內部邏輯
-- 消費者透過 `GenerateParams.model` 覆寫
+### Provider / 模型選擇
+- provider-aware routing 預設採 **OpenAI-first, Gemini-backup**
+- 既有 Gemini-only 相容 API 仍保留，不強迫立即遷移
+- 不可在 provider-aware 路由中靜默 fallback；跨 model/provider 必須由顯式 policy 開啟
+- 消費者透過 routing policy 與 model id 決定最終 provider/model
 
 ### 其他約束
 - **禁止 fallback 行為**：key 不足時直接 throw `NoAvailableKeyError`，不可靜默降級
-- **禁止 hardcode 任何 API key 或憑證**，一律由 `StorageAdapter` 提供
+- **禁止 hardcode 任何 API key 或憑證**。
+- Gemini pool-backed key 由 `StorageAdapter` 提供。
+- phase 1 provider-aware adapters 可接受 consumer-supplied provider-specific credentials，但仍不得硬編碼在 library 內。
 - `console.*` 僅允許 `console.warn` / `console.error`，不可用 `console.log`
 - `step-orchestration` 只提供 generic orchestration primitives，不可吸收 consumer app 的 prompt wording、domain rule、或 product workflow decision
-- provider-aware routing 必須維持 Gemini-first consumer 的 no-silent-fallback 契約；phase 1 的 Gemini adapter 為 pool-backed compatibility adapter，跨 model/provider fallback 必須由顯式 policy 開啟
+- provider-aware routing 必須維持既有 Gemini-only consumer 的 no-silent-fallback 契約；phase 1 的 Gemini adapter 為 pool-backed compatibility adapter，OpenAI 為預設優先 provider，跨 model/provider fallback 必須由顯式 policy 開啟
 
 ---
 

@@ -1,4 +1,4 @@
-import { getBuiltInModel } from "./models.js";
+import { defaultProviderPriority, getBuiltInModel } from "./models.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 
 function credentialRef(adapter: ProviderAdapter): string {
@@ -33,7 +33,7 @@ export class ProviderRouter {
   constructor(private readonly adapters: ProviderAdapter[]) {}
 
   select(policy: RoutePolicy = {}): RoutedProviderSelection {
-    const preferredProviders = policy.preferredProviders ?? this.adapters.map((adapter) => adapter.provider.id);
+    const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
       ...((policy.allowCrossProviderFallback ? policy.fallbackProviders : []) ?? []),

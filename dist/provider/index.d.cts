@@ -56,6 +56,7 @@ interface PoolCredential {
 type ProviderCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
 
 declare const builtInProviders: ProviderDefinition[];
+declare const defaultProviderPriority: readonly ["openai", "gemini"];
 declare function getBuiltInProvider(providerID: string): ProviderDefinition | undefined;
 declare function getBuiltInModel(modelID: string): ModelDefinition | undefined;
 
@@ -107,4 +108,4 @@ declare class OpenAIProviderAdapter implements ProviderAdapter {
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
 }
 
-export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedProviderSelection, builtInProviders, getBuiltInModel, getBuiltInProvider };
+export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedProviderSelection, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };

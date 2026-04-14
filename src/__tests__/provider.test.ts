@@ -4,7 +4,7 @@ import { KeyPool } from "../key-pool/index.js";
 import type { ApiKey, StorageAdapter } from "../key-pool/index.js";
 import { GeminiProviderAdapter } from "../provider/adapters/gemini.js";
 import { ProviderID } from "../provider/schema.js";
-import { getBuiltInModel, getBuiltInProvider } from "../provider/models.js";
+import { defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "../provider/models.js";
 import { ProviderRouter } from "../provider/router.js";
 import { OpenAIProviderAdapter } from "../provider/adapters/openai.js";
 import type { ProviderAdapter } from "../provider/types.js";
@@ -54,6 +54,10 @@ describe("provider registry", () => {
     expect(getBuiltInProvider(ProviderID.OpenAI)?.id).toBe("openai");
   });
 
+  it("uses OpenAI first and Gemini second in default provider priority", () => {
+    expect(defaultProviderPriority).toEqual([ProviderID.OpenAI, ProviderID.Gemini]);
+  });
+
   it("resolves built-in models", () => {
     expect(getBuiltInModel("gemini-2.5-flash")?.provider).toBe("gemini");
     expect(getBuiltInModel("gpt-4.1-mini")?.provider).toBe("openai");
@@ -86,6 +90,12 @@ describe("provider router", () => {
   it("prefers requested provider and model when available", () => {
     const router = new ProviderRouter([geminiAdapter, openAIAdapter]);
     const selected = router.select({ preferredProviders: [ProviderID.OpenAI], preferredModel: "gpt-4.1-mini" });
+    expect(selected).toEqual({ provider: "openai", model: "gpt-4.1-mini", credentialType: "api", credentialRef: "openai-default" });
+  });
+
+  it("uses OpenAI-first priority by default when preferredProviders is omitted", () => {
+    const router = new ProviderRouter([geminiAdapter, openAIAdapter]);
+    const selected = router.select();
     expect(selected).toEqual({ provider: "openai", model: "gpt-4.1-mini", credentialType: "api", credentialRef: "openai-default" });
   });
 

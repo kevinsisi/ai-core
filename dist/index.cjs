@@ -35,6 +35,7 @@ __export(index_exports, {
   StreamInterruptedError: () => StreamInterruptedError,
   builtInProviders: () => builtInProviders,
   classifyError: () => classifyError,
+  defaultProviderPriority: () => defaultProviderPriority,
   getBuiltInModel: () => getBuiltInModel,
   getBuiltInProvider: () => getBuiltInProvider,
   planPreferredKeys: () => planPreferredKeys,
@@ -1326,18 +1327,19 @@ var openAIModels = [
 ];
 var builtInProviders = [
   {
-    id: ProviderID.Gemini,
-    name: "Gemini",
-    authTypes: ["pool"],
-    models: geminiModels
-  },
-  {
     id: ProviderID.OpenAI,
     name: "OpenAI",
     authTypes: ["api"],
     models: openAIModels
+  },
+  {
+    id: ProviderID.Gemini,
+    name: "Gemini",
+    authTypes: ["pool"],
+    models: geminiModels
   }
 ];
+var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
 function getBuiltInProvider(providerID) {
   return builtInProviders.find((provider) => provider.id === providerID);
 }
@@ -1532,6 +1534,7 @@ var OpenAIProviderAdapter = class {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
   planPreferredKeys,

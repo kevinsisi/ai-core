@@ -1,3 +1,4 @@
+import "./chunk-33KXZGPC.js";
 import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
@@ -7,10 +8,10 @@ import {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "./chunk-OGZARUPK.js";
-import "./chunk-33KXZGPC.js";
+} from "./chunk-IS74WYMA.js";
 import {
   GeminiClient,
   StreamInterruptedError
@@ -49,6 +50,7 @@ export {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
   planPreferredKeys,

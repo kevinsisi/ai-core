@@ -1,6 +1,6 @@
 # @kevinsisi/ai-core
 
-Shared AI modules for the HomeProject — Gemini-first AI runtime primitives with provider-aware building blocks, retry logic, client wrappers, and agent-runtime primitives.
+Shared AI modules for the HomeProject — provider-aware AI runtime primitives with OpenAI-first routing defaults, Gemini compatibility, retry logic, client wrappers, and agent-runtime primitives.
 
 **Repo:** https://github.com/kevinsisi/ai-core
 
@@ -237,7 +237,7 @@ Do **not** use it to move domain prompts or product workflow rules into `ai-core
 
 ### 2.8 Use provider-aware routing for multi-provider adoption
 
-`ai-core` now includes first-phase provider support so consumers can remain Gemini-first while preparing for OpenAI fallback and future provider expansion.
+`ai-core` now includes first-phase provider support with OpenAI-first routing defaults and Gemini as a compatibility / backup path.
 
 ```ts
 import {
@@ -246,6 +246,7 @@ import {
   OpenAIProviderAdapter,
   ProviderID,
   ProviderRouter,
+  defaultProviderPriority,
 } from "@kevinsisi/ai-core";
 
 const gemini = new GeminiProviderAdapter(pool);
@@ -258,14 +259,15 @@ const openai = new OpenAIProviderAdapter({
 
 const router = new ProviderRouter([gemini, openai]);
 const selected = router.select({
-  preferredProviders: [ProviderID.Gemini],
-  fallbackProviders: [ProviderID.OpenAI],
+  preferredProviders: [...defaultProviderPriority],
+  fallbackProviders: [ProviderID.Gemini],
   allowCrossProviderFallback: true,
 });
 ```
 
 Important:
-- existing Gemini-first consumers still keep their current no-silent-fallback contract unless they explicitly opt into provider-aware routing
+- provider-aware consumers should prefer OpenAI first, then Gemini as backup
+- existing Gemini-only consumers still keep their current no-silent-fallback contract unless they explicitly opt into provider-aware routing
 - phase 1 uses provider-specific API-key credentials for providers such as OpenAI, while Gemini keeps a pool-backed compatibility adapter
 
 ### 3. Use `withRetry` Directly (Low-level)

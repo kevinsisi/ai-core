@@ -4,11 +4,11 @@ description: Purpose, consumers, architecture, and deployment of @kevinsisi/ai-c
 type: project
 ---
 
-@kevinsisi/ai-core — shared Gemini infrastructure package for the HomeProject ecosystem.
+@kevinsisi/ai-core — shared provider-aware AI infrastructure package for the HomeProject ecosystem.
 
 **Consumers:** mind-diary, project-bridge, auto-spec-test, sheet-to-car
 
-**Why:** Centralises Gemini key pool rotation, retry logic, and client wrapper so all four services share identical behaviour and don't each reinvent quota handling.
+**Why:** Centralises provider-aware routing, Gemini key pool rotation, retry logic, and client wrappers so all four services share identical behaviour and don't each reinvent quota handling.
 
 **Architecture modules:**
 - `key-pool` — KeyPool + StorageAdapter interface + SqliteAdapter (optional peer dep)
@@ -16,7 +16,7 @@ type: project
 - `client` — GeminiClient wrapping KeyPool + withRetry with multimodal support
 - `agent-runtime` — shared active-task, pending-action, interrupt, and completion-gate primitives for long-running agents
 - `step-orchestration` — shared named-step runner, preferred-key planning, lease heartbeat, and step execution metadata for quota-sensitive workflows
-- `provider` — provider/model schema, auth types, pool-backed Gemini compatibility adapter, text-only OpenAI adapter, and minimal provider routing policy
+- `provider` — provider/model schema, auth types, OpenAI-first routing defaults, pool-backed Gemini compatibility adapter, text-only OpenAI adapter, and minimal provider routing policy
 
 **Deployment:**
 - Published to GitHub Packages (`npm.pkg.github.com`) via GitHub Actions on `vX.Y.Z` tag push
@@ -30,8 +30,11 @@ type: project
 - `KeyPool.status()` 供 getKeyStatus 用途：回傳所有 key 的即時狀態
 
 **Key constraints:**
-- Default/recommended model: `gemini-2.5-flash`
+- Provider-aware routing default: OpenAI first, Gemini backup
+- Existing Gemini-only compatibility APIs continue to use `gemini-2.5-flash`
 - No fallback on key exhaustion — throw `NoAvailableKeyError` immediately
-- No hardcoded credentials — always sourced from StorageAdapter
+- No hardcoded credentials
+- Gemini pool-backed keys come from `StorageAdapter`
+- Phase 1 provider-aware adapters may accept consumer-supplied provider-specific credentials
 - `better-sqlite3` is optional peer dep — must not be in `dependencies`
 - Dual-format build (ESM + CJS) via tsup — always rebuild and commit dist/ with src changes

@@ -16,7 +16,7 @@
 - auth-aware
 - routing-policy-driven
 
-因此 `ai-core` 需要新增多 provider / 多 model 基礎架構，讓 consumer 不再只能做單一 Gemini provider 的 key rotation。
+因此 `ai-core` 需要新增多 provider / 多 model 基礎架構，讓 consumer 不再只能做單一 Gemini provider 的 key rotation，並能以 OpenAI 作為 provider-aware routing 的預設優先提供者、Gemini 作為相容與備援路徑。
 
 ## What Changes
 
@@ -24,14 +24,14 @@
 - Add provider auth abstraction that supports at least API-key style credentials, with room for later OAuth-style provider auth
 - Add provider adapter interface so each provider can map its own client / request / capability semantics
 - Add routing policy primitives so consumers can choose provider → model → key in a structured way, with fallback only when explicitly enabled by policy
-- Keep Gemini support working as the initial built-in provider
-- Add OpenAI as the first non-Gemini provider target in the design scope
+- Keep Gemini support working as the compatibility and backup provider path
+- Add OpenAI as the first non-Gemini provider target and the default preferred provider for provider-aware routing
 
 ## Capabilities
 
 ### New Capabilities
 
-- `multi-provider-support`: shared provider/model/auth/routing primitives for Gemini-first but not Gemini-only AI runtime design.
+- `multi-provider-support`: shared provider/model/auth/routing primitives for OpenAI-first, provider-aware AI runtime design with Gemini compatibility.
 
 ## Impact
 

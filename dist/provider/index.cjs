@@ -25,6 +25,7 @@ __export(provider_exports, {
   ProviderID: () => ProviderID,
   ProviderRouter: () => ProviderRouter,
   builtInProviders: () => builtInProviders,
+  defaultProviderPriority: () => defaultProviderPriority,
   getBuiltInModel: () => getBuiltInModel,
   getBuiltInProvider: () => getBuiltInProvider
 });
@@ -73,18 +74,19 @@ var openAIModels = [
 ];
 var builtInProviders = [
   {
-    id: ProviderID.Gemini,
-    name: "Gemini",
-    authTypes: ["pool"],
-    models: geminiModels
-  },
-  {
     id: ProviderID.OpenAI,
     name: "OpenAI",
     authTypes: ["api"],
     models: openAIModels
+  },
+  {
+    id: ProviderID.Gemini,
+    name: "Gemini",
+    authTypes: ["pool"],
+    models: geminiModels
   }
 ];
+var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
 function getBuiltInProvider(providerID) {
   return builtInProviders.find((provider) => provider.id === providerID);
 }
@@ -588,6 +590,7 @@ var OpenAIProviderAdapter = class {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
 });
