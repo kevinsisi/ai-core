@@ -1,7 +1,8 @@
+import "../chunk-33KXZGPC.js";
 import {
   GeminiClient,
   StreamInterruptedError
-} from "../chunk-CDZITA7F.js";
+} from "../chunk-QZBKFRLG.js";
 import "../chunk-6YVUQYI5.js";
 import "../chunk-NHGYIXGT.js";
 export {

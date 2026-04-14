@@ -2,10 +2,6 @@ import {
   withRetry
 } from "./chunk-6YVUQYI5.js";
 
-// src/client/gemini-client.ts
-import { readFileSync } from "fs";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 // src/client/types.ts
 var StreamInterruptedError = class extends Error {
   chunksReceived;
@@ -20,6 +16,8 @@ var StreamInterruptedError = class extends Error {
 };
 
 // src/client/gemini-client.ts
+import { readFileSync } from "fs";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 function extractUsage(response) {
   const meta = response.usageMetadata;
   if (!meta) return null;
@@ -220,4 +218,4 @@ export {
   StreamInterruptedError,
   GeminiClient
 };
-//# sourceMappingURL=chunk-CDZITA7F.js.map
+//# sourceMappingURL=chunk-QZBKFRLG.js.map

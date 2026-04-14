@@ -2,7 +2,9 @@ export { A as ApiKey, K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyErro
 export { SqliteAdapter, SqliteDatabase } from './key-pool/index.cjs';
 export { classifyError, withRetry } from './retry/index.cjs';
 export { E as ErrorClass, M as MaxRetriesExceededError, R as RetryEvent, a as RetryOptions } from './types-xF6t7Rx7.cjs';
-export { ChatMessage, ClientOptions, GeminiClient, GenerateParams, GenerateResponse, StreamInterruptedError, TokenUsage } from './client/index.cjs';
+export { GeminiClient } from './client/index.cjs';
+export { C as ChatMessage, a as ClientOptions, G as GenerateParams, b as GenerateResponse, S as StreamInterruptedError, T as TokenUsage } from './types-DPIsmmhM.cjs';
 export { ActiveTask, AgentRuntime, AgentRuntimeOptions, CheckpointPriority, CheckpointStatus, CompletionCheckResult, InterruptClassification, InterruptEvent, PendingAction, TaskCheckpoint, TaskStatus } from './agent-runtime/index.cjs';
 export { LeaseHeartbeat, PlannedStepAssignment, RunnableStep, StepDefinition, StepExecutionMetadata, StepExecutionResult, StepRunner, StepRunnerOptions, planPreferredKeys } from './step-orchestration/index.cjs';
+export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, ModelID, OAuthCredential, OpenAIProviderAdapter, ProviderAdapter, ProviderAuthType, ProviderCapabilities, ProviderCredential, ProviderDefinition, ProviderID, ProviderRouter, RoutePolicy, RoutedProviderSelection, builtInProviders, getBuiltInModel, getBuiltInProvider } from './provider/index.cjs';
 import '@google/generative-ai';

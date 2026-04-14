@@ -1,6 +1,6 @@
 # @kevinsisi/ai-core
 
-Shared AI modules for the HomeProject — Gemini key pool, retry logic, GeminiClient wrapper, and agent-runtime primitives.
+Shared AI modules for the HomeProject — Gemini-first AI runtime primitives with provider-aware building blocks, retry logic, client wrappers, and agent-runtime primitives.
 
 **Repo:** https://github.com/kevinsisi/ai-core
 
@@ -21,6 +21,9 @@ npm install github:kevinsisi/ai-core
 | `AgentRuntime` | Structured runtime state for active tasks, pending actions, interrupts, and completion gates |
 | `StepRunner` | Runs quota-sensitive named Gemini steps with preferred-key planning and explicit fallback |
 | `LeaseHeartbeat` | Reusable key-lease renewal helper for long-running Gemini calls |
+| `ProviderRouter` | Selects provider/model combinations according to explicit routing policy |
+| `GeminiProviderAdapter` | Pool-backed compatibility adapter for existing Gemini KeyPool consumers |
+| `OpenAIProviderAdapter` | Minimal text-only OpenAI chat-completions adapter for first-phase multi-provider adoption |
 | `withRetry` | Low-level retry helper with error classification and key rotation |
 | `classifyError` | Classifies an error as `quota` / `rate-limit` / `network` / `fatal` / `unknown` |
 | `NoAvailableKeyError` | Thrown when all keys are exhausted or in cooldown |
@@ -231,6 +234,39 @@ Use this layer for:
 - step-level metadata (retry count, chosen key, fallback usage, duration)
 
 Do **not** use it to move domain prompts or product workflow rules into `ai-core`.
+
+### 2.8 Use provider-aware routing for multi-provider adoption
+
+`ai-core` now includes first-phase provider support so consumers can remain Gemini-first while preparing for OpenAI fallback and future provider expansion.
+
+```ts
+import {
+  KeyPool,
+  GeminiProviderAdapter,
+  OpenAIProviderAdapter,
+  ProviderID,
+  ProviderRouter,
+} from "@kevinsisi/ai-core";
+
+const gemini = new GeminiProviderAdapter(pool);
+
+const openai = new OpenAIProviderAdapter({
+  type: "api",
+  provider: ProviderID.OpenAI,
+  apiKey: "openai-key-managed-by-consumer",
+});
+
+const router = new ProviderRouter([gemini, openai]);
+const selected = router.select({
+  preferredProviders: [ProviderID.Gemini],
+  fallbackProviders: [ProviderID.OpenAI],
+  allowCrossProviderFallback: true,
+});
+```
+
+Important:
+- existing Gemini-first consumers still keep their current no-silent-fallback contract unless they explicitly opt into provider-aware routing
+- phase 1 uses provider-specific API-key credentials for providers such as OpenAI, while Gemini keeps a pool-backed compatibility adapter
 
 ### 3. Use `withRetry` Directly (Low-level)
 

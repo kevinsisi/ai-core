@@ -2,9 +2,19 @@ import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
 import {
+  GeminiProviderAdapter,
+  OpenAIProviderAdapter,
+  ProviderID,
+  ProviderRouter,
+  builtInProviders,
+  getBuiltInModel,
+  getBuiltInProvider
+} from "./chunk-OGZARUPK.js";
+import "./chunk-33KXZGPC.js";
+import {
   GeminiClient,
   StreamInterruptedError
-} from "./chunk-CDZITA7F.js";
+} from "./chunk-QZBKFRLG.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -26,14 +36,21 @@ import {
 export {
   AgentRuntime,
   GeminiClient,
+  GeminiProviderAdapter,
   KeyPool,
   LeaseHeartbeat,
   MaxRetriesExceededError,
   NoAvailableKeyError,
+  OpenAIProviderAdapter,
+  ProviderID,
+  ProviderRouter,
   SqliteAdapter,
   StepRunner,
   StreamInterruptedError,
+  builtInProviders,
   classifyError,
+  getBuiltInModel,
+  getBuiltInProvider,
   planPreferredKeys,
   withRetry
 };

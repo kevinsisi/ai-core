@@ -131,7 +131,7 @@ Migration expectation:
 
 The first implementation phase should include:
 - provider/model schema
-- Gemini provider adapter
-- OpenAI provider adapter
+- Gemini provider adapter as a pool-backed compatibility layer
+- OpenAI provider adapter with text-only capabilities in phase 1
 - minimal provider routing policy with explicit opt-in fallback controls
 - compatibility layer for existing Gemini consumers

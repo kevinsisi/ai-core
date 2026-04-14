@@ -17,6 +17,7 @@ src/
 ├── client/        GeminiClient
 ├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
 ├── step-orchestration/ StepRunner + preferred-key planning + lease heartbeat
+├── provider/      Provider schema + auth + registry + adapters + router
 └── index.ts       統一 re-export
 ```
 
@@ -102,6 +103,7 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/client` | GeminiClient, StreamInterruptedError, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 | `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
+| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, ProviderRouter, pool-backed Gemini adapter, OpenAI adapter |
 
 ---
 
@@ -131,6 +133,7 @@ const { text } = await client.generateContent({
 - **禁止 hardcode 任何 API key 或憑證**，一律由 `StorageAdapter` 提供
 - `console.*` 僅允許 `console.warn` / `console.error`，不可用 `console.log`
 - `step-orchestration` 只提供 generic orchestration primitives，不可吸收 consumer app 的 prompt wording、domain rule、或 product workflow decision
+- provider-aware routing 必須維持 Gemini-first consumer 的 no-silent-fallback 契約；phase 1 的 Gemini adapter 為 pool-backed compatibility adapter，跨 model/provider fallback 必須由顯式 policy 開啟
 
 ---
 

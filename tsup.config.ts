@@ -8,6 +8,7 @@ export default defineConfig({
     "src/client/index.ts",
     "src/agent-runtime/index.ts",
     "src/step-orchestration/index.ts",
+    "src/provider/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

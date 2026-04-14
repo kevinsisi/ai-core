@@ -16,6 +16,7 @@ type: project
 - `client` — GeminiClient wrapping KeyPool + withRetry with multimodal support
 - `agent-runtime` — shared active-task, pending-action, interrupt, and completion-gate primitives for long-running agents
 - `step-orchestration` — shared named-step runner, preferred-key planning, lease heartbeat, and step execution metadata for quota-sensitive workflows
+- `provider` — provider/model schema, auth types, pool-backed Gemini compatibility adapter, text-only OpenAI adapter, and minimal provider routing policy
 
 **Deployment:**
 - Published to GitHub Packages (`npm.pkg.github.com`) via GitHub Actions on `vX.Y.Z` tag push

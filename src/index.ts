@@ -46,3 +46,27 @@ export type {
   StepExecutionResult,
   StepRunnerOptions,
 } from "./step-orchestration/index.js";
+
+// Provider support
+export {
+  ProviderID,
+  builtInProviders,
+  getBuiltInModel,
+  getBuiltInProvider,
+  ProviderRouter,
+  GeminiProviderAdapter,
+  OpenAIProviderAdapter,
+} from "./provider/index.js";
+export type {
+  ApiKeyCredential,
+  OAuthCredential,
+  ProviderAuthType,
+  ProviderCredential,
+  ModelDefinition,
+  ProviderCapabilities,
+  ProviderDefinition,
+  ModelID,
+  ProviderAdapter,
+  RoutePolicy,
+  RoutedProviderSelection,
+} from "./provider/index.js";

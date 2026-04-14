@@ -1,60 +1,7 @@
 import { K as KeyPool } from '../key-pool-CQHu-T7W.cjs';
-import * as _google_generative_ai from '@google/generative-ai';
-
-interface ChatMessage {
-    role: "user" | "model";
-    parts: string;
-}
-/** Base64-encoded image sent inline with the request. */
-interface InlineImagePart {
-    type: "inline";
-    /** MIME type, e.g. "image/png", "image/jpeg" */
-    mimeType: string;
-    /** Base64-encoded image data */
-    data: string;
-}
-/** Image loaded from a local file path (read and base64-encoded automatically). */
-interface FileImagePart {
-    type: "file";
-    /** MIME type, e.g. "image/png", "image/jpeg" */
-    mimeType: string;
-    /** Absolute or relative path to the image file */
-    filePath: string;
-}
-type ImagePart = InlineImagePart | FileImagePart;
-interface GenerateParams {
-    /** Gemini model name, e.g. "gemini-2.5-flash" */
-    model: string;
-    systemInstruction?: string;
-    prompt: string;
-    /** Optional images to send alongside the prompt (multimodal). */
-    images?: ImagePart[];
-    /**
-     * Optional Gemini tool declarations (e.g., Google Search grounding).
-     * Passed directly to `getGenerativeModel()`.
-     */
-    tools?: _google_generative_ai.Tool[];
-    history?: ChatMessage[];
-    maxOutputTokens?: number;
-}
-interface TokenUsage {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-}
-interface GenerateResponse {
-    text: string;
-    /** null if the model does not return usage metadata */
-    usage: TokenUsage | null;
-}
-interface ClientOptions {
-    /** Number of retry attempts on transient errors (default: 3) */
-    maxRetries?: number;
-}
-declare class StreamInterruptedError extends Error {
-    readonly chunksReceived: number;
-    constructor(chunksReceived: number, cause?: unknown);
-}
+import { a as ClientOptions, G as GenerateParams, b as GenerateResponse } from '../types-DPIsmmhM.cjs';
+export { C as ChatMessage, S as StreamInterruptedError, T as TokenUsage } from '../types-DPIsmmhM.cjs';
+import '@google/generative-ai';
 
 /**
  * Thin wrapper around @google/generative-ai that handles:
@@ -82,4 +29,4 @@ declare class GeminiClient {
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
-export { type ChatMessage, type ClientOptions, GeminiClient, type GenerateParams, type GenerateResponse, StreamInterruptedError, type TokenUsage };
+export { ClientOptions, GeminiClient, GenerateParams, GenerateResponse };
