@@ -204,7 +204,8 @@ var StepRunner = class {
           }
         });
       } catch (error) {
-        await this.pool.release(currentKey, true).catch(() => {
+        const authFailure = finalErrorClass === "fatal";
+        await this.pool.release(currentKey, true, authFailure).catch(() => {
         });
         throw error;
       } finally {
@@ -220,4 +221,4 @@ export {
   LeaseHeartbeat,
   StepRunner
 };
-//# sourceMappingURL=chunk-TN4YPUJH.js.map
+//# sourceMappingURL=chunk-CDZZRLEW.js.map

@@ -1193,7 +1193,8 @@ var StepRunner = class {
           }
         });
       } catch (error) {
-        await this.pool.release(currentKey, true).catch(() => {
+        const authFailure = finalErrorClass === "fatal";
+        await this.pool.release(currentKey, true, authFailure).catch(() => {
         });
         throw error;
       } finally {
