@@ -1,7 +1,7 @@
 {
   "name": "@kevinsisi/ai-core",
   "version": "2.2.0",
-  "description": "Shared AI modules for HomeProject — Gemini key pool, retry logic, and client wrapper",
+  "description": "Shared AI modules for HomeProject — provider-aware runtime primitives with OpenAI-first routing and Gemini compatibility",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

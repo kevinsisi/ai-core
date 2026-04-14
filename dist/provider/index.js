@@ -7,7 +7,7 @@ import {
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "../chunk-IS74WYMA.js";
+} from "../chunk-ZAHFPLCJ.js";
 import "../chunk-QZBKFRLG.js";
 import "../chunk-6YVUQYI5.js";
 import "../chunk-NHGYIXGT.js";

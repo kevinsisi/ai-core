@@ -95,7 +95,7 @@ var ProviderRouter = class {
   }
   adapters;
   select(policy = {}) {
-    const preferredProviders = policy.preferredProviders ?? this.adapters.map((adapter) => adapter.provider.id);
+    const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
       ...(policy.allowCrossProviderFallback ? policy.fallbackProviders : []) ?? []
@@ -246,4 +246,4 @@ export {
   GeminiProviderAdapter,
   OpenAIProviderAdapter
 };
-//# sourceMappingURL=chunk-IS74WYMA.js.map
+//# sourceMappingURL=chunk-ZAHFPLCJ.js.map
