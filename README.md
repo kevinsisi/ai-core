@@ -163,6 +163,33 @@ Important constraint:
 - Pass only structured plain data (`string` / `number` / `boolean` / `null` / arrays / plain objects of the same kinds).
 - Do not pass functions, class instances, or other non-cloneable values.
 
+### 2.6 Split quota-sensitive work into micro-steps
+
+For long or quota-sensitive Gemini workflows, prefer splitting the job into small named actions instead of one large call.
+
+Recommended pattern:
+- `identify-object`
+- `identify-vehicle`
+- `extract-features-batch-1`
+- `extract-features-batch-2`
+- `search-dimensions`
+- `generate-featurescript`
+
+Key assignment rule:
+- When enough healthy keys exist, different actions in the same job should prefer different keys.
+- When healthy keys are fewer than actions, later actions may explicitly fall back to shared rotation in the consumer's orchestration layer instead of pretending they still have isolated keys.
+- Treat preferred keys as a soft preference, not a hard guarantee.
+
+Important:
+- This does not change the library contract that true pool exhaustion still throws `NoAvailableKeyError`.
+- If you implement shared fallback, do it explicitly in the consumer/job orchestration layer, not as a silent hidden fallback inside `ai-core`.
+
+This pattern improves:
+- observability
+- retry granularity
+- cooldown-aware scheduling
+- quota distribution across a single multi-step job
+
 Recommended layering:
 - `GeminiClient` / `withRetry` / `KeyPool`: model access, retry, and key rotation
 - `AgentRuntime`: active task state, pending action, interrupt integration, completion checks
