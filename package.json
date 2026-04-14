@@ -1,6 +1,6 @@
 {
   "name": "@kevinsisi/ai-core",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Shared AI modules for HomeProject — Gemini key pool, retry logic, and client wrapper",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -31,6 +31,11 @@
       "types": "./dist/agent-runtime/index.d.ts",
       "import": "./dist/agent-runtime/index.js",
       "require": "./dist/agent-runtime/index.cjs"
+    },
+    "./step-orchestration": {
+      "types": "./dist/step-orchestration/index.d.ts",
+      "import": "./dist/step-orchestration/index.js",
+      "require": "./dist/step-orchestration/index.cjs"
     }
   },
   "files": [

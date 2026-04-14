@@ -117,6 +117,65 @@ export class KeyPool {
   // ── Public API ─────────────────────────────────────────────────────
 
   /**
+   * Allocate a single key, preferring the specified key when it is healthy and leasable.
+   * Falls back to the normal ranked allocation order when the preferred key cannot be used.
+   */
+  async allocatePreferred(
+    preferredKey?: string | null,
+    options: { allowFallback?: boolean } = {}
+  ): Promise<{ key: string; usedPreferred: boolean }> {
+    const keys = await this.getKeys(true);
+    const available = this.availableKeys(keys);
+
+    if (available.length === 0) {
+      throw new NoAvailableKeyError();
+    }
+
+    const ranked = this.rankAvailable(available);
+    const allowFallback = options.allowFallback ?? true;
+    const ordered = preferredKey
+      ? allowFallback
+        ? [
+            ...ranked.filter((key) => key.key === preferredKey),
+            ...ranked.filter((key) => key.key !== preferredKey),
+          ]
+        : ranked.filter((key) => key.key === preferredKey)
+      : ranked;
+
+    const now = Date.now();
+
+    for (const selected of ordered) {
+      const leaseUntil = now + this.allocationLeaseMs;
+      const leaseToken = `${selected.id}:${leaseUntil}:${Math.random().toString(36).slice(2)}`;
+      const acquired = await this.adapter.acquireLease(
+        selected.id,
+        leaseUntil,
+        leaseToken,
+        now
+      );
+      if (!acquired) continue;
+
+      selected.leaseUntil = leaseUntil;
+      selected.leaseToken = leaseToken;
+      const key = selected.key;
+      this.inFlight.set(key, (this.inFlight.get(key) ?? 0) + 1);
+      this.lastAllocatedAt.set(key, now);
+      this.leaseTokens.set(key, leaseToken);
+
+      return {
+        key,
+        usedPreferred: Boolean(preferredKey) && key === preferredKey,
+      };
+    }
+
+    throw new NoAvailableKeyError(
+      preferredKey && !allowFallback
+        ? `Preferred key could not be leased: ${preferredKey}`
+        : "No preferred or fallback key could be leased"
+    );
+  }
+
+  /**
    * Allocate up to `count` available keys using load-aware ranking.
    * Throws NoAvailableKeyError if zero keys are available or the request
    * asks for more keys than are currently available.

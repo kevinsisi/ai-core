@@ -16,6 +16,7 @@ src/
 ├── retry/         withRetry + classifyError
 ├── client/        GeminiClient
 ├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
+├── step-orchestration/ StepRunner + preferred-key planning + lease heartbeat
 └── index.ts       統一 re-export
 ```
 
@@ -100,6 +101,7 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/retry` | withRetry, classifyError, MaxRetriesExceededError, ErrorClass, RetryOptions |
 | `@kevinsisi/ai-core/client` | GeminiClient, StreamInterruptedError, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
+| `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
 
 ---
 
@@ -128,6 +130,7 @@ const { text } = await client.generateContent({
 - **禁止 fallback 行為**：key 不足時直接 throw `NoAvailableKeyError`，不可靜默降級
 - **禁止 hardcode 任何 API key 或憑證**，一律由 `StorageAdapter` 提供
 - `console.*` 僅允許 `console.warn` / `console.error`，不可用 `console.log`
+- `step-orchestration` 只提供 generic orchestration primitives，不可吸收 consumer app 的 prompt wording、domain rule、或 product workflow decision
 
 ---
 

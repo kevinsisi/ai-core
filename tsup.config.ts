@@ -7,6 +7,7 @@ export default defineConfig({
     "src/retry/index.ts",
     "src/client/index.ts",
     "src/agent-runtime/index.ts",
+    "src/step-orchestration/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

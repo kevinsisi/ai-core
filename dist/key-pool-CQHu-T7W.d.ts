@@ -62,6 +62,16 @@ declare class KeyPool {
     private clearLease;
     private releaseLocalTracking;
     /**
+     * Allocate a single key, preferring the specified key when it is healthy and leasable.
+     * Falls back to the normal ranked allocation order when the preferred key cannot be used.
+     */
+    allocatePreferred(preferredKey?: string | null, options?: {
+        allowFallback?: boolean;
+    }): Promise<{
+        key: string;
+        usedPreferred: boolean;
+    }>;
+    /**
      * Allocate up to `count` available keys using load-aware ranking.
      * Throws NoAvailableKeyError if zero keys are available or the request
      * asks for more keys than are currently available.

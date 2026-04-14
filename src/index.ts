@@ -35,3 +35,14 @@ export type {
   TaskCheckpoint,
   TaskStatus,
 } from "./agent-runtime/index.js";
+
+// Step orchestration
+export { LeaseHeartbeat, StepRunner, planPreferredKeys } from "./step-orchestration/index.js";
+export type {
+  PlannedStepAssignment,
+  RunnableStep,
+  StepDefinition,
+  StepExecutionMetadata,
+  StepExecutionResult,
+  StepRunnerOptions,
+} from "./step-orchestration/index.js";

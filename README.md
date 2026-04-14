@@ -19,6 +19,8 @@ npm install github:kevinsisi/ai-core
 | `SqliteAdapter` | Built-in SQLite adapter (requires `better-sqlite3`) |
 | `GeminiClient` | Wrapper around `@google/generative-ai` with automatic key allocation and retry |
 | `AgentRuntime` | Structured runtime state for active tasks, pending actions, interrupts, and completion gates |
+| `StepRunner` | Runs quota-sensitive named Gemini steps with preferred-key planning and explicit fallback |
+| `LeaseHeartbeat` | Reusable key-lease renewal helper for long-running Gemini calls |
 | `withRetry` | Low-level retry helper with error classification and key rotation |
 | `classifyError` | Classifies an error as `quota` / `rate-limit` / `network` / `fatal` / `unknown` |
 | `NoAvailableKeyError` | Thrown when all keys are exhausted or in cooldown |
@@ -192,8 +194,43 @@ This pattern improves:
 
 Recommended layering:
 - `GeminiClient` / `withRetry` / `KeyPool`: model access, retry, and key rotation
+- `StepRunner` / `planPreferredKeys` / `LeaseHeartbeat`: quota-sensitive micro-step orchestration and execution metadata
 - `AgentRuntime`: active task state, pending action, interrupt integration, completion checks
 - Consumer app: semantic classification, tool routing, history persistence, and side effects
+
+### 2.7 Use `StepRunner` for quota-sensitive workflows
+
+For workflows that should be split into explicit named steps:
+
+```ts
+import { KeyPool } from "@kevinsisi/ai-core";
+import { StepRunner } from "@kevinsisi/ai-core/step-orchestration";
+
+const pool = new KeyPool(new MyAdapter());
+const runner = new StepRunner(pool);
+
+const results = await runner.runSteps([
+  {
+    id: "identify-object",
+    name: "identify-object",
+    run: async (apiKey) => callGemini(apiKey, "identify the object"),
+  },
+  {
+    id: "extract-features",
+    name: "extract-features",
+    allowSharedFallback: true,
+    run: async (apiKey) => callGemini(apiKey, "extract features"),
+  },
+]);
+```
+
+Use this layer for:
+- named micro-step execution
+- preferred-key planning
+- explicit shared fallback
+- step-level metadata (retry count, chosen key, fallback usage, duration)
+
+Do **not** use it to move domain prompts or product workflow rules into `ai-core`.
 
 ### 3. Use `withRetry` Directly (Low-level)
 
