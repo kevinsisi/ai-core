@@ -1,3 +1,4 @@
+import type { KeyPool } from "../key-pool/key-pool.js";
 import type { ErrorClass } from "../retry/types.js";
 
 export interface StepDefinition {
@@ -42,4 +43,41 @@ export interface StepRunnerOptions {
   maxRetries?: number;
   initialBackoffMs?: number;
   maxBackoffMs?: number;
+  acquireInitialKey?: (context: AcquireInitialKeyContext) => Promise<AcquireKeyResult>;
+  rotateKey?: (context: RotateKeyContext) => Promise<RotateKeyResult>;
+  releaseKey?: (context: ReleaseKeyContext) => Promise<void>;
+}
+
+export interface AcquireInitialKeyContext {
+  pool: KeyPool;
+  step: RunnableStep<unknown>;
+  preferredKey: string | null;
+}
+
+export interface AcquireKeyResult {
+  key: string;
+  usedPreferred: boolean;
+  sharedFallbackUsed: boolean;
+}
+
+export interface RotateKeyContext {
+  pool: KeyPool;
+  step: RunnableStep<unknown>;
+  currentKey: string;
+  retryCount: number;
+  errorClass: ErrorClass | null;
+}
+
+export interface RotateKeyResult {
+  key: string;
+  sharedFallbackUsed: boolean;
+}
+
+export interface ReleaseKeyContext {
+  pool: KeyPool;
+  step: RunnableStep<unknown>;
+  key: string;
+  failed: boolean;
+  authFailure: boolean;
+  errorClass: ErrorClass | null;
 }

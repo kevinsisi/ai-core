@@ -3,7 +3,14 @@ import { withRetry } from "../retry/index.js";
 import type { ErrorClass } from "../retry/types.js";
 import { LeaseHeartbeat } from "./lease-heartbeat.js";
 import { planPreferredKeys } from "./planner.js";
-import type { RunnableStep, StepExecutionResult, StepRunnerOptions } from "./types.js";
+import type {
+  AcquireKeyResult,
+  ReleaseKeyContext,
+  RotateKeyResult,
+  RunnableStep,
+  StepExecutionResult,
+  StepRunnerOptions,
+} from "./types.js";
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, stepName: string): Promise<T> {
   return Promise.race([
@@ -46,13 +53,13 @@ export class StepRunner {
       let sharedFallbackUsed = assignment.sharedFallbackRequired;
       let finalErrorClass: ErrorClass | null = null;
 
-      const initialAllocation = await this.pool.allocatePreferred(assignment.preferredKey, {
-        allowFallback: step.allowSharedFallback ?? false,
-      });
+      const initialAllocation = this.normalizeAcquireResult(
+        step,
+        assignment.preferredKey,
+        await this.acquireInitialKey(step, assignment.preferredKey)
+      );
       let currentKey = initialAllocation.key;
-      if (assignment.preferredKey && !initialAllocation.usedPreferred) {
-        sharedFallbackUsed = true;
-      }
+      sharedFallbackUsed = sharedFallbackUsed || initialAllocation.sharedFallbackUsed;
 
       const heartbeat = new LeaseHeartbeat(this.pool, currentKey);
 
@@ -81,16 +88,9 @@ export class StepRunner {
             initialBackoffMs: this.options.initialBackoffMs,
             maxBackoffMs: this.options.maxBackoffMs,
             rotateKey: async () => {
-              await this.pool.release(currentKey, true);
               retryCount += 1;
-              if (!(step.allowSharedFallback ?? false)) {
-                throw new NoAvailableKeyError(
-                  `Step \"${step.name}\" requires key rotation, but shared fallback is disabled`
-                );
-              }
-
-              const next = await this.pool.allocatePreferred(null, { allowFallback: true });
-              sharedFallbackUsed = true;
+              const next = await this.rotateKey(step, currentKey, retryCount, finalErrorClass);
+              sharedFallbackUsed = sharedFallbackUsed || next.sharedFallbackUsed;
               currentKey = next.key;
               heartbeat.switchKey(currentKey);
               return currentKey;
@@ -101,7 +101,14 @@ export class StepRunner {
           }
         );
 
-        await this.pool.release(currentKey, false);
+        await this.releaseKey({
+          pool: this.pool,
+          step,
+          key: currentKey,
+          failed: false,
+          authFailure: false,
+          errorClass: finalErrorClass,
+        });
 
         results.push({
           value,
@@ -119,7 +126,14 @@ export class StepRunner {
         });
       } catch (error) {
         const authFailure = finalErrorClass === "fatal";
-        await this.pool.release(currentKey, true, authFailure).catch(() => {});
+        await this.releaseKey({
+          pool: this.pool,
+          step,
+          key: currentKey,
+          failed: true,
+          authFailure,
+          errorClass: finalErrorClass,
+        }).catch(() => {});
         throw error;
       } finally {
         heartbeat.stop();
@@ -127,5 +141,91 @@ export class StepRunner {
     }
 
     return results;
+  }
+
+  private async acquireInitialKey(
+    step: RunnableStep<unknown>,
+    preferredKey: string | null
+  ): Promise<AcquireKeyResult> {
+    if (this.options.acquireInitialKey) {
+      return this.options.acquireInitialKey({
+        pool: this.pool,
+        step,
+        preferredKey,
+      });
+    }
+
+    const allocation = await this.pool.allocatePreferred(preferredKey, {
+      allowFallback: step.allowSharedFallback ?? false,
+    });
+
+    return {
+      key: allocation.key,
+      usedPreferred: allocation.usedPreferred,
+      sharedFallbackUsed: Boolean(preferredKey) && !allocation.usedPreferred,
+    };
+  }
+
+  private async rotateKey(
+    step: RunnableStep<unknown>,
+    currentKey: string,
+    retryCount: number,
+    errorClass: ErrorClass | null
+  ): Promise<RotateKeyResult> {
+    if (!(step.allowSharedFallback ?? false)) {
+      throw new NoAvailableKeyError(
+        `Step \"${step.name}\" requires key rotation, but shared fallback is disabled`
+      );
+    }
+
+    if (this.options.rotateKey) {
+      const result = await this.options.rotateKey({
+        pool: this.pool,
+        step,
+        currentKey,
+        retryCount,
+        errorClass,
+      });
+      return {
+        key: result.key,
+        sharedFallbackUsed: result.sharedFallbackUsed || result.key !== currentKey,
+      };
+    }
+
+    await this.pool.release(currentKey, true, errorClass === "fatal");
+    const next = await this.pool.allocatePreferred(null, { allowFallback: true });
+    return {
+      key: next.key,
+      sharedFallbackUsed: true,
+    };
+  }
+
+  private async releaseKey(context: ReleaseKeyContext): Promise<void> {
+    if (this.options.releaseKey) {
+      return this.options.releaseKey(context);
+    }
+
+    await this.pool.release(context.key, context.failed, context.authFailure);
+  }
+
+  private normalizeAcquireResult(
+    step: RunnableStep<unknown>,
+    preferredKey: string | null,
+    result: AcquireKeyResult
+  ): AcquireKeyResult {
+    const usedPreferred = preferredKey ? result.key === preferredKey : false;
+    const sharedFallbackUsed = result.sharedFallbackUsed || Boolean(preferredKey) && result.key !== preferredKey;
+
+    if (sharedFallbackUsed && !(step.allowSharedFallback ?? false)) {
+      throw new NoAvailableKeyError(
+        `Step \"${step.name}\" requires shared fallback but allowSharedFallback is false`
+      );
+    }
+
+    return {
+      key: result.key,
+      usedPreferred,
+      sharedFallbackUsed,
+    };
   }
 }

@@ -38,6 +38,38 @@ interface StepRunnerOptions {
     maxRetries?: number;
     initialBackoffMs?: number;
     maxBackoffMs?: number;
+    acquireInitialKey?: (context: AcquireInitialKeyContext) => Promise<AcquireKeyResult>;
+    rotateKey?: (context: RotateKeyContext) => Promise<RotateKeyResult>;
+    releaseKey?: (context: ReleaseKeyContext) => Promise<void>;
+}
+interface AcquireInitialKeyContext {
+    pool: KeyPool;
+    step: RunnableStep<unknown>;
+    preferredKey: string | null;
+}
+interface AcquireKeyResult {
+    key: string;
+    usedPreferred: boolean;
+    sharedFallbackUsed: boolean;
+}
+interface RotateKeyContext {
+    pool: KeyPool;
+    step: RunnableStep<unknown>;
+    currentKey: string;
+    retryCount: number;
+    errorClass: ErrorClass | null;
+}
+interface RotateKeyResult {
+    key: string;
+    sharedFallbackUsed: boolean;
+}
+interface ReleaseKeyContext {
+    pool: KeyPool;
+    step: RunnableStep<unknown>;
+    key: string;
+    failed: boolean;
+    authFailure: boolean;
+    errorClass: ErrorClass | null;
 }
 
 declare function planPreferredKeys(pool: KeyPool, steps: readonly StepDefinition[]): Promise<PlannedStepAssignment[]>;
@@ -61,6 +93,10 @@ declare class StepRunner {
     constructor(pool: KeyPool, options?: StepRunnerOptions);
     runStep<T>(step: RunnableStep<T>): Promise<StepExecutionResult<T>>;
     runSteps(steps: readonly RunnableStep<unknown>[]): Promise<StepExecutionResult<unknown>[]>;
+    private acquireInitialKey;
+    private rotateKey;
+    private releaseKey;
+    private normalizeAcquireResult;
 }
 
 export { LeaseHeartbeat, type PlannedStepAssignment, type RunnableStep, type StepDefinition, type StepExecutionMetadata, type StepExecutionResult, StepRunner, type StepRunnerOptions, planPreferredKeys };
