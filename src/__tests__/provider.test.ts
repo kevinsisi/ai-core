@@ -1,10 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GenerateParams } from "../client/types.js";
 import { KeyPool } from "../key-pool/index.js";
 import type { ApiKey, StorageAdapter } from "../key-pool/index.js";
 import { GeminiProviderAdapter } from "../provider/adapters/gemini.js";
 import { ProviderID } from "../provider/schema.js";
-import { defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "../provider/models.js";
+import {
+  clearRegisteredProviders,
+  defaultProviderPriority,
+  getBuiltInModel,
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  registerProvider,
+  unregisterProvider,
+} from "../provider/models.js";
 import { ProviderRouter } from "../provider/router.js";
 import { OpenAIProviderAdapter } from "../provider/adapters/openai.js";
 import { OpenRouterProviderAdapter } from "../provider/adapters/openrouter.js";
@@ -50,6 +59,8 @@ function makeAdapter(keys: ApiKey[]): StorageAdapter {
 }
 
 describe("provider registry", () => {
+  afterEach(() => clearRegisteredProviders());
+
   it("exposes built-in Gemini and OpenAI providers", () => {
     expect(getBuiltInProvider(ProviderID.Gemini)?.id).toBe("gemini");
     expect(getBuiltInProvider(ProviderID.OpenAI)?.id).toBe("openai");
@@ -62,6 +73,47 @@ describe("provider registry", () => {
   it("resolves built-in models", () => {
     expect(getBuiltInModel("gemini-2.5-flash")?.provider).toBe("gemini");
     expect(getBuiltInModel("gpt-4.1-mini")?.provider).toBe("openai");
+  });
+
+  it("registers custom providers and resolves them via getProvider/getModel", () => {
+    registerProvider({
+      id: "anthropic-direct",
+      name: "Anthropic (direct)",
+      authTypes: ["api"],
+      models: [
+        {
+          id: "claude-opus-4-7",
+          provider: "anthropic-direct",
+          name: "Claude Opus 4.7",
+          capabilities: {
+            streaming: true,
+            tools: true,
+            reasoning: true,
+            multimodalInput: true,
+            multimodalOutput: false,
+          },
+        },
+      ],
+    });
+
+    expect(getProvider("anthropic-direct")?.name).toBe("Anthropic (direct)");
+    expect(getModel("claude-opus-4-7")?.provider).toBe("anthropic-direct");
+    // built-in lookups still pass through
+    expect(getProvider("openai")?.name).toBe("OpenAI");
+    expect(getModel("gpt-4.1-mini")?.provider).toBe("openai");
+  });
+
+  it("rejects re-registering a built-in provider id", () => {
+    expect(() =>
+      registerProvider({ id: "openai", name: "spoof", authTypes: ["api"], models: [] })
+    ).toThrow(/built-in/);
+  });
+
+  it("unregisterProvider removes a custom provider", () => {
+    registerProvider({ id: "tmp", name: "tmp", authTypes: ["api"], models: [] });
+    expect(getProvider("tmp")?.id).toBe("tmp");
+    expect(unregisterProvider("tmp")).toBe(true);
+    expect(getProvider("tmp")).toBeUndefined();
   });
 });
 

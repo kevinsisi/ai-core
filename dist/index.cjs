@@ -37,12 +37,18 @@ __export(index_exports, {
   StreamInterruptedError: () => StreamInterruptedError,
   builtInProviders: () => builtInProviders,
   classifyError: () => classifyError,
+  clearRegisteredProviders: () => clearRegisteredProviders,
   defaultProviderPriority: () => defaultProviderPriority,
   getBuiltInModel: () => getBuiltInModel,
   getBuiltInProvider: () => getBuiltInProvider,
+  getModel: () => getModel,
+  getProvider: () => getProvider,
+  listRegisteredProviders: () => listRegisteredProviders,
   planPreferredKeys: () => planPreferredKeys,
+  registerProvider: () => registerProvider,
   toGeminiTools: () => toGeminiTools,
   toOpenAITools: () => toOpenAITools,
+  unregisterProvider: () => unregisterProvider,
   withRetry: () => withRetry
 });
 module.exports = __toCommonJS(index_exports);
@@ -1423,6 +1429,36 @@ function getBuiltInModel(modelID) {
   }
   return void 0;
 }
+var customProviders = /* @__PURE__ */ new Map();
+function registerProvider(definition) {
+  if (getBuiltInProvider(definition.id)) {
+    throw new Error(
+      `Cannot re-register built-in provider id "${definition.id}". Use a distinct id for custom providers.`
+    );
+  }
+  customProviders.set(definition.id, definition);
+}
+function unregisterProvider(providerID) {
+  return customProviders.delete(providerID);
+}
+function clearRegisteredProviders() {
+  customProviders.clear();
+}
+function getProvider(providerID) {
+  return getBuiltInProvider(providerID) ?? customProviders.get(providerID);
+}
+function getModel(modelID) {
+  const builtIn = getBuiltInModel(modelID);
+  if (builtIn) return builtIn;
+  for (const provider of customProviders.values()) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+function listRegisteredProviders() {
+  return [...builtInProviders, ...customProviders.values()];
+}
 
 // src/provider/router.ts
 function credentialRef(adapter) {
@@ -1762,12 +1798,18 @@ var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
   planPreferredKeys,
+  registerProvider,
   toGeminiTools,
   toOpenAITools,
+  unregisterProvider,
   withRetry
 });
 //# sourceMappingURL=index.cjs.map

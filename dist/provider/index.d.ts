@@ -1,12 +1,17 @@
 import { G as GenerateParams, b as GenerateResponse } from '../types-DP2JVUqN.js';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
 
+/**
+ * Built-in provider id constants. Custom providers may register additional
+ * ids via `registerProvider()`; the `ProviderID` type stays open (`string`)
+ * so consumers can pass any registered id without widening casts.
+ */
 declare const ProviderID: {
     readonly Gemini: "gemini";
     readonly OpenAI: "openai";
     readonly OpenRouter: "openrouter";
 };
-type ProviderID = (typeof ProviderID)[keyof typeof ProviderID];
+type ProviderID = string;
 type ModelID = string;
 interface ProviderCapabilities {
     streaming: boolean;
@@ -59,6 +64,22 @@ declare const builtInProviders: ProviderDefinition[];
 declare const defaultProviderPriority: readonly ["openai", "gemini"];
 declare function getBuiltInProvider(providerID: string): ProviderDefinition | undefined;
 declare function getBuiltInModel(modelID: string): ModelDefinition | undefined;
+/**
+ * Register a custom provider definition. The new id becomes resolvable via
+ * `getProvider()` and its models via `getModel()`. Built-in ids cannot be
+ * shadowed — callers must pick a distinct id (e.g. "anthropic-direct",
+ * "azure-openai-prod").
+ */
+declare function registerProvider(definition: ProviderDefinition): void;
+declare function unregisterProvider(providerID: string): boolean;
+/**
+ * Visible for testing — wipe every registered custom provider. Built-in
+ * providers are not affected.
+ */
+declare function clearRegisteredProviders(): void;
+declare function getProvider(providerID: string): ProviderDefinition | undefined;
+declare function getModel(modelID: string): ModelDefinition | undefined;
+declare function listRegisteredProviders(): ProviderDefinition[];
 
 interface ProviderAdapter {
     readonly provider: ProviderDefinition;
@@ -188,4 +209,4 @@ declare class OpenRouterProviderAdapter extends OpenAICompatibleAdapter {
     protected buildHeaders(): Record<string, string>;
 }
 
-export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, type RoutedStream, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };
+export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, type RoutedStream, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider };

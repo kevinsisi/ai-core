@@ -1,7 +1,18 @@
 export { ProviderID } from "./schema.js";
 export type { ModelDefinition, ProviderCapabilities, ProviderDefinition, ModelID } from "./schema.js";
 export type { ApiKeyCredential, OAuthCredential, ProviderAuthType, ProviderCredential } from "./auth.js";
-export { builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "./models.js";
+export {
+  builtInProviders,
+  clearRegisteredProviders,
+  defaultProviderPriority,
+  getBuiltInModel,
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider,
+} from "./models.js";
 export type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 export { ProviderRouter } from "./router.js";
 export type { RoutedExecution, RoutedStream } from "./router.js";

@@ -94,6 +94,36 @@ function getBuiltInModel(modelID) {
   }
   return void 0;
 }
+var customProviders = /* @__PURE__ */ new Map();
+function registerProvider(definition) {
+  if (getBuiltInProvider(definition.id)) {
+    throw new Error(
+      `Cannot re-register built-in provider id "${definition.id}". Use a distinct id for custom providers.`
+    );
+  }
+  customProviders.set(definition.id, definition);
+}
+function unregisterProvider(providerID) {
+  return customProviders.delete(providerID);
+}
+function clearRegisteredProviders() {
+  customProviders.clear();
+}
+function getProvider(providerID) {
+  return getBuiltInProvider(providerID) ?? customProviders.get(providerID);
+}
+function getModel(modelID) {
+  const builtIn = getBuiltInModel(modelID);
+  if (builtIn) return builtIn;
+  for (const provider of customProviders.values()) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+function listRegisteredProviders() {
+  return [...builtInProviders, ...customProviders.values()];
+}
 
 // src/provider/router.ts
 function credentialRef(adapter) {
@@ -421,10 +451,16 @@ export {
   defaultProviderPriority,
   getBuiltInProvider,
   getBuiltInModel,
+  registerProvider,
+  unregisterProvider,
+  clearRegisteredProviders,
+  getProvider,
+  getModel,
+  listRegisteredProviders,
   ProviderRouter,
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-ETKQQOIL.js.map
+//# sourceMappingURL=chunk-DQEKZQFK.js.map

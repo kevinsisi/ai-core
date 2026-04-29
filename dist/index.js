@@ -10,10 +10,16 @@ import {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
-  getBuiltInProvider
-} from "./chunk-ETKQQOIL.js";
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider
+} from "./chunk-DQEKZQFK.js";
 import {
   GeminiClient,
   StreamInterruptedError,
@@ -56,12 +62,18 @@ export {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
   planPreferredKeys,
+  registerProvider,
   toGeminiTools,
   toOpenAITools,
+  unregisterProvider,
   withRetry
 };
 //# sourceMappingURL=index.js.map

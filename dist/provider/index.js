@@ -6,10 +6,16 @@ import {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
-  getBuiltInProvider
-} from "../chunk-ETKQQOIL.js";
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider
+} from "../chunk-DQEKZQFK.js";
 import "../chunk-H7NZ5RPG.js";
 import "../chunk-6YVUQYI5.js";
 import "../chunk-NHGYIXGT.js";
@@ -21,8 +27,14 @@ export {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
-  getBuiltInProvider
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider
 };
 //# sourceMappingURL=index.js.map

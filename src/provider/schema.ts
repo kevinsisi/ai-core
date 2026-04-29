@@ -1,10 +1,15 @@
+/**
+ * Built-in provider id constants. Custom providers may register additional
+ * ids via `registerProvider()`; the `ProviderID` type stays open (`string`)
+ * so consumers can pass any registered id without widening casts.
+ */
 export const ProviderID = {
   Gemini: "gemini",
   OpenAI: "openai",
   OpenRouter: "openrouter",
 } as const;
 
-export type ProviderID = (typeof ProviderID)[keyof typeof ProviderID];
+export type ProviderID = string;
 
 export type ModelID = string;
 
