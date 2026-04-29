@@ -35,6 +35,11 @@ export interface RoutedExecution {
   response: GenerateResponse;
 }
 
+export interface RoutedStream {
+  selection: RoutedProviderSelection;
+  stream: AsyncGenerator<string, void, unknown>;
+}
+
 export class ProviderRouter {
   constructor(private readonly adapters: ProviderAdapter[]) {}
 
@@ -63,6 +68,21 @@ export class ProviderRouter {
     const { adapter, selection } = this.selectAdapter(effectivePolicy);
     const response = await adapter.generateContent({ ...params, model: selection.model });
     return { selection, response };
+  }
+
+  /**
+   * Mirror of execute() for streaming. Selection runs eagerly so the caller
+   * can inspect which provider/model resolved before iterating the stream.
+   */
+  executeStream(params: GenerateParams, policy: RoutePolicy = {}): RoutedStream {
+    const effectivePolicy: RoutePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { streaming: true, ...(policy.requiredCapabilities ?? {}) },
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const stream = adapter.streamContent({ ...params, model: selection.model });
+    return { selection, stream };
   }
 
   private selectAdapter(policy: RoutePolicy): {

@@ -29,4 +29,10 @@ export class GeminiProviderAdapter implements ProviderAdapter {
   async generateContent(params: import("../../client/types.js").GenerateParams) {
     return this.client.generateContent(params);
   }
+
+  streamContent(
+    params: import("../../client/types.js").GenerateParams
+  ): AsyncGenerator<string, void, unknown> {
+    return this.client.streamContent(params);
+  }
 }

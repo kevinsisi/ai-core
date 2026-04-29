@@ -65,6 +65,12 @@ interface ProviderAdapter {
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
+    /**
+     * Stream incremental text chunks for a generation. Adapters that cannot
+     * stream MUST throw rather than fall back to a buffered response — silent
+     * fallback would mask capability mismatches from the router.
+     */
+    streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 interface RoutePolicy {
     preferredProviders?: ProviderID[];
@@ -86,6 +92,10 @@ interface RoutedExecution {
     selection: RoutedProviderSelection;
     response: GenerateResponse;
 }
+interface RoutedStream {
+    selection: RoutedProviderSelection;
+    stream: AsyncGenerator<string, void, unknown>;
+}
 declare class ProviderRouter {
     private readonly adapters;
     constructor(adapters: ProviderAdapter[]);
@@ -101,6 +111,11 @@ declare class ProviderRouter {
      * via `allowCrossProviderFallback` / `allowCrossModelFallback`.
      */
     execute(params: GenerateParams, policy?: RoutePolicy): Promise<RoutedExecution>;
+    /**
+     * Mirror of execute() for streaming. Selection runs eagerly so the caller
+     * can inspect which provider/model resolved before iterating the stream.
+     */
+    executeStream(params: GenerateParams, policy?: RoutePolicy): RoutedStream;
     private selectAdapter;
 }
 
@@ -112,6 +127,7 @@ declare class GeminiProviderAdapter implements ProviderAdapter {
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
+    streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
 declare class OpenAIProviderAdapter implements ProviderAdapter {
@@ -121,6 +137,7 @@ declare class OpenAIProviderAdapter implements ProviderAdapter {
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
+    streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
-export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };
+export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, type RoutedStream, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };

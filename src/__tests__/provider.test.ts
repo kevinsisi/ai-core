@@ -65,6 +65,10 @@ describe("provider registry", () => {
 });
 
 describe("provider router", () => {
+  async function* emptyStream(): AsyncGenerator<string, void, unknown> {
+    return;
+  }
+
   const geminiAdapter: ProviderAdapter = {
     provider: getBuiltInProvider("gemini")!,
     credential: { type: "pool", provider: "gemini" },
@@ -74,6 +78,7 @@ describe("provider router", () => {
       return model?.provider === "gemini" ? model : undefined;
     },
     generateContent: async (_params: GenerateParams) => ({ text: "gemini", usage: null }),
+    streamContent: () => emptyStream(),
   };
 
   const openAIAdapter: ProviderAdapter = {
@@ -85,6 +90,7 @@ describe("provider router", () => {
       return model?.provider === "openai" ? model : undefined;
     },
     generateContent: async (_params: GenerateParams) => ({ text: "openai", usage: null }),
+    streamContent: () => emptyStream(),
   };
 
   it("prefers requested provider and model when available", () => {
@@ -117,6 +123,7 @@ describe("provider router", () => {
       supports: () => false,
       getModel: () => undefined,
       generateContent: async (_params: GenerateParams) => ({ text: "first", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const secondOpenAIAdapter: ProviderAdapter = {
@@ -128,6 +135,7 @@ describe("provider router", () => {
         return model?.provider === "openai" ? model : undefined;
       },
       generateContent: async (_params: GenerateParams) => ({ text: "second", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const router = new ProviderRouter([geminiAdapter, firstOpenAIAdapter, secondOpenAIAdapter]);
@@ -147,6 +155,7 @@ describe("provider router", () => {
       supports: () => false,
       getModel: () => undefined,
       generateContent: async (_params: GenerateParams) => ({ text: "first", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const secondOpenAIAdapter: ProviderAdapter = {
@@ -158,6 +167,7 @@ describe("provider router", () => {
         return model?.provider === "openai" ? model : undefined;
       },
       generateContent: async (_params: GenerateParams) => ({ text: "second", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const router = new ProviderRouter([firstOpenAIAdapter, secondOpenAIAdapter]);
@@ -204,6 +214,25 @@ describe("provider router", () => {
 
     expect(result.selection.provider).toBe("gemini");
     expect(result.response.text).toBe("gemini-response");
+  });
+
+  it("executeStream() selects an adapter and yields its stream chunks", async () => {
+    async function* fakeStream() {
+      yield "a";
+      yield "b";
+    }
+    const streamingOpenAI: ProviderAdapter = {
+      ...openAIAdapter,
+      streamContent: () => fakeStream(),
+    };
+
+    const router = new ProviderRouter([geminiAdapter, streamingOpenAI]);
+    const { selection, stream } = router.executeStream({ model: "gpt-4.1-mini", prompt: "hi" });
+    expect(selection.provider).toBe("openai");
+
+    const out: string[] = [];
+    for await (const chunk of stream) out.push(chunk);
+    expect(out).toEqual(["a", "b"]);
   });
 
   it("execute() does not silently fall back to a different model when policy disallows it", async () => {
@@ -273,6 +302,42 @@ describe("openai provider adapter", () => {
         images: [{ type: "inline", mimeType: "image/png", data: "abc" }],
       })
     ).rejects.toThrow(/multimodal/);
+  });
+
+  it("streams chat completions deltas via SSE", async () => {
+    const sseLines = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" } }] })}`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: " world" } }] })}`,
+      `data: [DONE]`,
+      ``,
+    ].join("\n");
+
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseLines));
+        controller.close();
+      },
+    });
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      body,
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "stream-key",
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of adapter.streamContent({ model: "gpt-4.1-mini", prompt: "hi" })) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toEqual(["Hello", " world"]);
   });
 
   it("forwards function tools to OpenAI in the chat completions tools format", async () => {

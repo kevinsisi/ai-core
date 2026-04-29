@@ -24,8 +24,8 @@ const openAIModels = [
     provider: ProviderID.OpenAI,
     name: "GPT-4.1 mini",
     capabilities: {
-      streaming: false,
-      tools: false,
+      streaming: true,
+      tools: true,
       reasoning: false,
       multimodalInput: false,
       multimodalOutput: false,

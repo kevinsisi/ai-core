@@ -11,7 +11,7 @@ import {
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "./chunk-4SYAYCGY.js";
+} from "./chunk-MAL7GISX.js";
 import {
   GeminiClient,
   StreamInterruptedError,

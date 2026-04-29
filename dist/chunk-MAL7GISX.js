@@ -1,5 +1,6 @@
 import {
   GeminiClient,
+  StreamInterruptedError,
   toOpenAITools
 } from "./chunk-EWQCOK3X.js";
 
@@ -33,8 +34,8 @@ var openAIModels = [
     provider: ProviderID.OpenAI,
     name: "GPT-4.1 mini",
     capabilities: {
-      streaming: false,
-      tools: false,
+      streaming: true,
+      tools: true,
       reasoning: false,
       multimodalInput: false,
       multimodalOutput: false
@@ -117,6 +118,20 @@ var ProviderRouter = class {
     const response = await adapter.generateContent({ ...params, model: selection.model });
     return { selection, response };
   }
+  /**
+   * Mirror of execute() for streaming. Selection runs eagerly so the caller
+   * can inspect which provider/model resolved before iterating the stream.
+   */
+  executeStream(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { streaming: true, ...policy.requiredCapabilities ?? {} }
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const stream = adapter.streamContent({ ...params, model: selection.model });
+    return { selection, stream };
+  }
   selectAdapter(policy) {
     const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
@@ -192,6 +207,9 @@ var GeminiProviderAdapter = class {
   async generateContent(params) {
     return this.client.generateContent(params);
   }
+  streamContent(params) {
+    return this.client.streamContent(params);
+  }
 };
 
 // src/provider/adapters/openai.ts
@@ -262,6 +280,74 @@ var OpenAIProviderAdapter = class {
       } : null
     };
   }
+  async *streamContent(params) {
+    if (params.images?.length) {
+      throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
+    }
+    const model = params.model || this.provider.models[0].id;
+    const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
+    const openAITools = toOpenAITools(params.tools);
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.credential.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...this.credential.organization && { "OpenAI-Organization": this.credential.organization }
+      },
+      body: JSON.stringify({
+        model,
+        messages: toOpenAIMessages(params),
+        ...openAITools && { tools: openAITools },
+        ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens },
+        stream: true
+      })
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(text || `OpenAI stream request failed with status ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.body) {
+      throw new Error("OpenAI stream response has no body");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    let chunksReceived = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        let newlineIndex;
+        while ((newlineIndex = buffered.indexOf("\n")) !== -1) {
+          const rawLine = buffered.slice(0, newlineIndex).replace(/\r$/, "");
+          buffered = buffered.slice(newlineIndex + 1);
+          if (!rawLine.startsWith("data:")) continue;
+          const payload = rawLine.slice(5).trim();
+          if (payload === "" || payload === "[DONE]") continue;
+          let parsed;
+          try {
+            parsed = JSON.parse(payload);
+          } catch (err) {
+            throw new StreamInterruptedError(chunksReceived, err);
+          }
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            chunksReceived += 1;
+            yield delta;
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof StreamInterruptedError) throw err;
+      throw new StreamInterruptedError(chunksReceived, err);
+    } finally {
+      reader.releaseLock();
+    }
+  }
 };
 
 export {
@@ -274,4 +360,4 @@ export {
   GeminiProviderAdapter,
   OpenAIProviderAdapter
 };
-//# sourceMappingURL=chunk-4SYAYCGY.js.map
+//# sourceMappingURL=chunk-MAL7GISX.js.map
