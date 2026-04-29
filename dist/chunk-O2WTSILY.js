@@ -2,7 +2,7 @@ import {
   GeminiClient,
   StreamInterruptedError,
   toOpenAITools
-} from "./chunk-H7NZ5RPG.js";
+} from "./chunk-QZIQCWBR.js";
 
 // src/provider/schema.ts
 var ProviderID = {
@@ -463,4 +463,4 @@ export {
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-DQEKZQFK.js.map
+//# sourceMappingURL=chunk-O2WTSILY.js.map

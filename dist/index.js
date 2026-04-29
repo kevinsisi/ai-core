@@ -19,18 +19,18 @@ import {
   listRegisteredProviders,
   registerProvider,
   unregisterProvider
-} from "./chunk-DQEKZQFK.js";
+} from "./chunk-O2WTSILY.js";
 import {
   GeminiClient,
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools
-} from "./chunk-H7NZ5RPG.js";
+} from "./chunk-QZIQCWBR.js";
 import {
   LeaseHeartbeat,
   StepRunner,
   planPreferredKeys
-} from "./chunk-RM5CSKXD.js";
+} from "./chunk-BOMBZZRG.js";
 import {
   KeyPool,
   SqliteAdapter
@@ -39,8 +39,13 @@ import "./chunk-U42SY5KL.js";
 import {
   MaxRetriesExceededError,
   classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  getProviderClassifier,
+  registerProviderClassifier,
+  unregisterProviderClassifier,
   withRetry
-} from "./chunk-6YVUQYI5.js";
+} from "./chunk-4UUUL6JJ.js";
 import {
   NoAvailableKeyError
 } from "./chunk-NHGYIXGT.js";
@@ -62,18 +67,23 @@ export {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
   clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
   getModel,
   getProvider,
+  getProviderClassifier,
   listRegisteredProviders,
   planPreferredKeys,
   registerProvider,
+  registerProviderClassifier,
   toGeminiTools,
   toOpenAITools,
   unregisterProvider,
+  unregisterProviderClassifier,
   withRetry
 };
 //# sourceMappingURL=index.js.map

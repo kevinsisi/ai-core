@@ -8,8 +8,17 @@ export type {
 } from "./key-pool/index.js";
 
 // Retry
-export { withRetry, classifyError, MaxRetriesExceededError } from "./retry/index.js";
-export type { ErrorClass, RetryOptions, RetryEvent } from "./retry/index.js";
+export {
+  withRetry,
+  classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  getProviderClassifier,
+  registerProviderClassifier,
+  unregisterProviderClassifier,
+  MaxRetriesExceededError,
+} from "./retry/index.js";
+export type { ErrorClass, RetryOptions, RetryEvent, ProviderErrorClassifier } from "./retry/index.js";
 
 // Client
 export { GeminiClient, StreamInterruptedError, toGeminiTools, toOpenAITools } from "./client/index.js";

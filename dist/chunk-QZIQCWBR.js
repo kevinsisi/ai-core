@@ -1,6 +1,6 @@
 import {
   withRetry
-} from "./chunk-6YVUQYI5.js";
+} from "./chunk-4UUUL6JJ.js";
 
 // src/client/tool-conversion.ts
 function toGeminiTools(tools) {
@@ -265,4 +265,4 @@ export {
   StreamInterruptedError,
   GeminiClient
 };
-//# sourceMappingURL=chunk-H7NZ5RPG.js.map
+//# sourceMappingURL=chunk-QZIQCWBR.js.map

@@ -1,6 +1,6 @@
 export { A as ApiKey, K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError, S as StorageAdapter } from './key-pool-CQHu-T7W.cjs';
 export { SqliteAdapter, SqliteDatabase } from './key-pool/index.cjs';
-export { classifyError, withRetry } from './retry/index.cjs';
+export { ProviderErrorClassifier, classifyError, classifyGeminiError, classifyOpenAIError, getProviderClassifier, registerProviderClassifier, unregisterProviderClassifier, withRetry } from './retry/index.cjs';
 export { E as ErrorClass, M as MaxRetriesExceededError, R as RetryEvent, a as RetryOptions } from './types-xF6t7Rx7.cjs';
 export { GeminiClient, toGeminiTools, toOpenAITools } from './client/index.cjs';
 export { C as ChatMessage, a as ClientOptions, F as FunctionTool, G as GenerateParams, b as GenerateResponse, P as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage, c as Tool } from './types-DP2JVUqN.cjs';

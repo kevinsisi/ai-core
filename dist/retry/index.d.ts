@@ -12,17 +12,39 @@ export { M as MaxRetriesExceededError, R as RetryEvent } from '../types-xF6t7Rx7
  */
 declare function withRetry<T>(fn: (apiKey: string) => Promise<T>, initialKey: string, options?: RetryOptions): Promise<T>;
 
+type ProviderErrorClassifier = (err: unknown) => ErrorClass;
 /**
- * Default Gemini API error classifier.
- * Checks HTTP status codes first (if present), then error message strings.
+ * Gemini API error classifier.
  *
  * Priority order (important — auth must be checked before rate-limit because
  * some 403 error messages contain the word "rate" in their URL):
  *   1. Fatal (401, 403, 400)
  *   2. Quota / Rate-limit (429, RESOURCE_EXHAUSTED)
- *   3. Network (ECONNREFUSED, ETIMEDOUT, fetch failed)
+ *   3. Network (ECONNREFUSED, ETIMEDOUT, 5xx, fetch failed)
  *   4. Unknown
  */
-declare function classifyError(err: unknown): ErrorClass;
+declare function classifyGeminiError(err: unknown): ErrorClass;
+/**
+ * OpenAI / OpenRouter / Azure OpenAI error classifier.
+ *
+ * Maps the documented OpenAI error `code` / `type` strings on top of the
+ * shared HTTP status heuristic:
+ *   - `invalid_api_key`, `account_deactivated`        → fatal
+ *   - `insufficient_quota`, `billing_hard_limit_*`    → quota
+ *   - `rate_limit_exceeded`, `tokens_per_min_limit*`  → rate-limit
+ */
+declare function classifyOpenAIError(err: unknown): ErrorClass;
+/**
+ * Backwards-compatible default classifier. Existing callers that did not
+ * tag a provider keep getting the Gemini-tuned behavior they were built on.
+ */
+declare const classifyError: ProviderErrorClassifier;
+declare function registerProviderClassifier(providerID: string, classifier: ProviderErrorClassifier): void;
+declare function unregisterProviderClassifier(providerID: string): boolean;
+/**
+ * Resolve a classifier for the given provider id, falling back to the
+ * generic `classifyError` if no provider-specific classifier is registered.
+ */
+declare function getProviderClassifier(providerID: string): ProviderErrorClassifier;
 
-export { ErrorClass, RetryOptions, classifyError, withRetry };
+export { ErrorClass, type ProviderErrorClassifier, RetryOptions, classifyError, classifyGeminiError, classifyOpenAIError, getProviderClassifier, registerProviderClassifier, unregisterProviderClassifier, withRetry };
