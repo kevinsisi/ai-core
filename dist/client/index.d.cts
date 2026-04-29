@@ -1,7 +1,8 @@
 import { K as KeyPool } from '../key-pool-CQHu-T7W.cjs';
-import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, k as RoutedProviderSelection, m as RoutedExecution, n as RoutedStream, j as ProviderRouter, l as Tool } from '../router-pOwkt_gE.cjs';
-export { C as ChatMessage, F as FunctionTool, i as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage } from '../router-pOwkt_gE.cjs';
+import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, e as RoutedProviderSelection, g as RoutedExecution, h as RoutedStream, d as ProviderRouter, f as Tool } from '../router-Bl9Li_uv.cjs';
+export { C as ChatMessage, F as FunctionTool, c as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage } from '../router-Bl9Li_uv.cjs';
 import { Tool as Tool$1 } from '@google/generative-ai';
+import '../types-Dbm33_oG.cjs';
 
 /**
  * Thin wrapper around @google/generative-ai that handles:

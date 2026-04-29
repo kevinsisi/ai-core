@@ -1,6 +1,6 @@
 import { GeminiClient } from "../../client/gemini-client.js";
 import type { KeyPool } from "../../key-pool/key-pool.js";
-import type { PoolCredential } from "../auth.js";
+import type { PoolCredential } from "../auth/index.js";
 import { getBuiltInModel, getBuiltInProvider } from "../models.js";
 import type { ProviderAdapter } from "../types.js";
 

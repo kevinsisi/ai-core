@@ -1,6 +1,14 @@
 export { ProviderID } from "./schema.js";
 export type { ModelDefinition, ProviderCapabilities, ProviderDefinition, ModelID } from "./schema.js";
-export type { ApiKeyCredential, OAuthCredential, ProviderAuthType, ProviderCredential } from "./auth.js";
+export type {
+  ApiKeyCredential,
+  OAuthCredential,
+  PoolCredential,
+  ProviderAuthType,
+  ProviderCredential,
+  StartOpenAIAuthOptions,
+} from "./auth/index.js";
+export { OpenAIOAuthError, refreshOpenAIToken, startOpenAIAuth } from "./auth/index.js";
 export {
   builtInProviders,
   clearRegisteredProviders,

@@ -1,4 +1,4 @@
-import type { ApiKeyCredential } from "../auth.js";
+import type { ApiKeyCredential } from "../auth/index.js";
 import { getBuiltInProvider } from "../models.js";
 import type { ModelDefinition } from "../schema.js";
 import { OpenAICompatibleAdapter } from "./openai-compatible.js";

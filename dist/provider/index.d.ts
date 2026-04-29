@@ -1,5 +1,8 @@
-import { g as ProviderDefinition, M as ModelDefinition, P as ProviderAdapter, o as PoolCredential, G as GenerateParams, b as GenerateResponse, A as ApiKeyCredential } from '../router-pOwkt_gE.js';
-export { c as ModelID, O as OAuthCredential, d as ProviderAuthType, e as ProviderCapabilities, f as ProviderCredential, h as ProviderID, j as ProviderRouter, R as RoutePolicy, m as RoutedExecution, k as RoutedProviderSelection, n as RoutedStream } from '../router-pOwkt_gE.js';
+import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-Dbm33_oG.js';
+export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID } from '../types-Dbm33_oG.js';
+export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './auth/index.js';
+import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-J1UJIOJ8.js';
+export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-J1UJIOJ8.js';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
 
 declare const builtInProviders: ProviderDefinition[];
@@ -34,6 +37,7 @@ declare class GeminiProviderAdapter implements ProviderAdapter {
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
+type OpenAICompatibleCredential = ApiKeyCredential | OAuthCredential;
 /**
  * Shared transport for OpenAI-style /chat/completions endpoints.
  *
@@ -41,15 +45,19 @@ declare class GeminiProviderAdapter implements ProviderAdapter {
  * additional headers (OpenRouter app attribution, organization scoping, etc.).
  * Tool conversion is keyed off `nativeToolProvider` so each subclass passes
  * through its own `provider-native` tools while still ignoring foreign ones.
+ *
+ * Accepts either an api-key or an OAuth credential — the bearer token is
+ * sourced from `apiKey` for api credentials and `accessToken` for oauth ones.
  */
 declare abstract class OpenAICompatibleAdapter implements ProviderAdapter {
     abstract readonly provider: ProviderDefinition;
-    readonly credential: ApiKeyCredential;
+    readonly credential: OpenAICompatibleCredential;
     protected abstract readonly defaultBaseURL: string;
     protected abstract readonly nativeToolProvider: string;
-    constructor(credential: ApiKeyCredential);
+    constructor(credential: OpenAICompatibleCredential);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
+    protected get bearerToken(): string;
     protected buildHeaders(): Record<string, string>;
     protected get baseURL(): string;
     private buildRequestBody;
@@ -61,7 +69,7 @@ declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
     readonly provider: ProviderDefinition;
     protected readonly defaultBaseURL = "https://api.openai.com/v1";
     protected readonly nativeToolProvider = "openai";
-    constructor(credential: ApiKeyCredential);
+    constructor(credential: ApiKeyCredential | OAuthCredential);
     protected buildHeaders(): Record<string, string>;
 }
 
@@ -91,4 +99,4 @@ declare class OpenRouterProviderAdapter extends OpenAICompatibleAdapter {
     protected buildHeaders(): Record<string, string>;
 }
 
-export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, ProviderAdapter, ProviderDefinition, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider };
+export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, PoolCredential, ProviderAdapter, ProviderDefinition, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider };

@@ -1,4 +1,4 @@
-import type { ApiKeyCredential } from "../auth.js";
+import type { ApiKeyCredential, OAuthCredential } from "../auth/index.js";
 import { getBuiltInProvider } from "../models.js";
 import { OpenAICompatibleAdapter } from "./openai-compatible.js";
 
@@ -8,16 +8,15 @@ export class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
   protected readonly defaultBaseURL = "https://api.openai.com/v1";
   protected readonly nativeToolProvider = "openai";
 
-  constructor(credential: ApiKeyCredential) {
+  constructor(credential: ApiKeyCredential | OAuthCredential) {
     super(credential);
   }
 
   protected override buildHeaders(): Record<string, string> {
-    return {
-      ...super.buildHeaders(),
-      ...(this.credential.organization && {
-        "OpenAI-Organization": this.credential.organization,
-      }),
-    };
+    const headers = super.buildHeaders();
+    if (this.credential.type === "api" && this.credential.organization) {
+      headers["OpenAI-Organization"] = this.credential.organization;
+    }
+    return headers;
   }
 }

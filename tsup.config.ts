@@ -9,6 +9,7 @@ export default defineConfig({
     "src/agent-runtime/index.ts",
     "src/step-orchestration/index.ts",
     "src/provider/index.ts",
+    "src/provider/auth/index.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

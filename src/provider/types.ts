@@ -1,5 +1,5 @@
 import type { GenerateResponse, GenerateParams } from "../client/types.js";
-import type { ProviderCredential } from "./auth.js";
+import type { ProviderCredential } from "./auth/index.js";
 import type { ModelDefinition, ProviderCapabilities, ProviderDefinition, ProviderID } from "./schema.js";
 
 export interface ProviderAdapter {

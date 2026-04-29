@@ -87,10 +87,14 @@ export {
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter,
+  OpenAIOAuthError,
+  refreshOpenAIToken,
+  startOpenAIAuth,
 } from "./provider/index.js";
 export type {
   ApiKeyCredential,
   OAuthCredential,
+  PoolCredential,
   ProviderAuthType,
   ProviderCredential,
   ModelDefinition,
@@ -101,4 +105,5 @@ export type {
   RoutePolicy,
   RoutedProviderSelection,
   OpenRouterAdapterOptions,
+  StartOpenAIAuthOptions,
 } from "./provider/index.js";

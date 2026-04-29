@@ -1,3 +1,5 @@
+import { e as ProviderDefinition, d as ProviderCredential, M as ModelDefinition, f as ProviderID, c as ProviderCapabilities } from './types-Dbm33_oG.cjs';
+
 interface ChatMessage {
     role: "user" | "model";
     parts: string;
@@ -80,65 +82,6 @@ declare class StreamInterruptedError extends Error {
     constructor(chunksReceived: number, cause?: unknown);
 }
 
-/**
- * Built-in provider id constants. Custom providers may register additional
- * ids via `registerProvider()`; the `ProviderID` type stays open (`string`)
- * so consumers can pass any registered id without widening casts.
- */
-declare const ProviderID: {
-    readonly Gemini: "gemini";
-    readonly OpenAI: "openai";
-    readonly OpenRouter: "openrouter";
-};
-type ProviderID = string;
-type ModelID = string;
-interface ProviderCapabilities {
-    streaming: boolean;
-    tools: boolean;
-    reasoning: boolean;
-    multimodalInput: boolean;
-    multimodalOutput: boolean;
-}
-interface ModelDefinition {
-    id: ModelID;
-    provider: ProviderID;
-    name: string;
-    capabilities: ProviderCapabilities;
-    contextWindow?: number;
-    outputLimit?: number;
-    costTier?: "low" | "medium" | "high";
-}
-interface ProviderDefinition {
-    id: ProviderID;
-    name: string;
-    authTypes: Array<"api" | "oauth" | "pool">;
-    models: ModelDefinition[];
-}
-
-type ProviderAuthType = "api" | "oauth" | "pool";
-interface ApiKeyCredential {
-    type: "api";
-    provider: ProviderID;
-    apiKey: string;
-    baseURL?: string;
-    organization?: string;
-    credentialLabel?: string;
-}
-interface OAuthCredential {
-    type: "oauth";
-    provider: ProviderID;
-    accessToken: string;
-    refreshToken?: string;
-    expiresAt?: string;
-    credentialLabel?: string;
-}
-interface PoolCredential {
-    type: "pool";
-    provider: ProviderID;
-    credentialLabel?: string;
-}
-type ProviderCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
-
 interface ProviderAdapter {
     readonly provider: ProviderDefinition;
     readonly credential: ProviderCredential;
@@ -199,4 +142,4 @@ declare class ProviderRouter {
     private selectAdapter;
 }
 
-export { type ApiKeyCredential as A, type ChatMessage as C, type FunctionTool as F, type GenerateParams as G, type ModelDefinition as M, type OAuthCredential as O, type ProviderAdapter as P, type RoutePolicy as R, StreamInterruptedError as S, type TokenUsage as T, type ClientOptions as a, type GenerateResponse as b, type ModelID as c, type ProviderAuthType as d, type ProviderCapabilities as e, type ProviderCredential as f, type ProviderDefinition as g, ProviderID as h, type ProviderNativeTool as i, ProviderRouter as j, type RoutedProviderSelection as k, type Tool as l, type RoutedExecution as m, type RoutedStream as n, type PoolCredential as o };
+export { type ChatMessage as C, type FunctionTool as F, type GenerateParams as G, type ProviderAdapter as P, type RoutePolicy as R, StreamInterruptedError as S, type TokenUsage as T, type ClientOptions as a, type GenerateResponse as b, type ProviderNativeTool as c, ProviderRouter as d, type RoutedProviderSelection as e, type Tool as f, type RoutedExecution as g, type RoutedStream as h };

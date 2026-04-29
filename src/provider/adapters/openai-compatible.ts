@@ -1,7 +1,7 @@
 import { toOpenAITools } from "../../client/tool-conversion.js";
 import { StreamInterruptedError } from "../../client/types.js";
 import type { GenerateParams, GenerateResponse } from "../../client/types.js";
-import type { ApiKeyCredential } from "../auth.js";
+import type { ApiKeyCredential, OAuthCredential } from "../auth/index.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
 import type { ProviderAdapter } from "../types.js";
 
@@ -43,6 +43,8 @@ export function toOpenAIMessages(params: GenerateParams): Array<Record<string, u
   return messages;
 }
 
+export type OpenAICompatibleCredential = ApiKeyCredential | OAuthCredential;
+
 /**
  * Shared transport for OpenAI-style /chat/completions endpoints.
  *
@@ -50,15 +52,18 @@ export function toOpenAIMessages(params: GenerateParams): Array<Record<string, u
  * additional headers (OpenRouter app attribution, organization scoping, etc.).
  * Tool conversion is keyed off `nativeToolProvider` so each subclass passes
  * through its own `provider-native` tools while still ignoring foreign ones.
+ *
+ * Accepts either an api-key or an OAuth credential — the bearer token is
+ * sourced from `apiKey` for api credentials and `accessToken` for oauth ones.
  */
 export abstract class OpenAICompatibleAdapter implements ProviderAdapter {
   abstract readonly provider: ProviderDefinition;
-  readonly credential: ApiKeyCredential;
+  readonly credential: OpenAICompatibleCredential;
 
   protected abstract readonly defaultBaseURL: string;
   protected abstract readonly nativeToolProvider: string;
 
-  constructor(credential: ApiKeyCredential) {
+  constructor(credential: OpenAICompatibleCredential) {
     this.credential = credential;
   }
 
@@ -71,9 +76,15 @@ export abstract class OpenAICompatibleAdapter implements ProviderAdapter {
     return model;
   }
 
+  protected get bearerToken(): string {
+    return this.credential.type === "oauth"
+      ? this.credential.accessToken
+      : this.credential.apiKey;
+  }
+
   protected buildHeaders(): Record<string, string> {
     return {
-      Authorization: `Bearer ${this.credential.apiKey}`,
+      Authorization: `Bearer ${this.bearerToken}`,
       "Content-Type": "application/json",
     };
   }

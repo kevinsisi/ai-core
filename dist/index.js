@@ -1,18 +1,17 @@
 import {
   AgentRuntime
-} from "./chunk-N36MYFLT.js";
+} from "./chunk-4KJMSVMU.js";
 import {
   MultiProviderClient
-} from "./chunk-SYDQYLL6.js";
+} from "./chunk-Y3GMIOWF.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-CU4F45JL.js";
+} from "./chunk-7IKSYRI2.js";
 import {
   GeminiClient,
-  ProviderID,
   ProviderRouter,
   StreamInterruptedError,
   builtInProviders,
@@ -27,7 +26,7 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-SZPBJJWT.js";
+} from "./chunk-7PJJJTXS.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -51,9 +50,17 @@ import {
 import {
   NoAvailableKeyError
 } from "./chunk-NHGYIXGT.js";
+import {
+  OpenAIOAuthError,
+  refreshOpenAIToken,
+  startOpenAIAuth
+} from "./chunk-X3XZ7O7J.js";
+import {
+  ProviderID
+} from "./chunk-ROU2NLPU.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.0.0";
+var AI_CORE_VERSION = "3.1.0";
 export {
   AI_CORE_VERSION,
   AgentRuntime,
@@ -65,6 +72,7 @@ export {
   MultiProviderClient,
   NoAvailableKeyError,
   OpenAICompatibleAdapter,
+  OpenAIOAuthError,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter,
   ProviderID,
@@ -85,8 +93,10 @@ export {
   getProviderClassifier,
   listRegisteredProviders,
   planPreferredKeys,
+  refreshOpenAIToken,
   registerProvider,
   registerProviderClassifier,
+  startOpenAIAuth,
   toGeminiTools,
   toOpenAITools,
   unregisterProvider,

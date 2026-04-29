@@ -1,6 +1,9 @@
 import {
   withRetry
 } from "./chunk-VOOZSXX5.js";
+import {
+  ProviderID
+} from "./chunk-ROU2NLPU.js";
 
 // src/client/tool-conversion.ts
 function toGeminiTools(tools) {
@@ -259,13 +262,6 @@ var GeminiClient = class {
   }
 };
 
-// src/provider/schema.ts
-var ProviderID = {
-  Gemini: "gemini",
-  OpenAI: "openai",
-  OpenRouter: "openrouter"
-};
-
 // src/provider/models.ts
 var geminiModels = [
   {
@@ -501,7 +497,6 @@ export {
   toOpenAITools,
   StreamInterruptedError,
   GeminiClient,
-  ProviderID,
   builtInProviders,
   defaultProviderPriority,
   getBuiltInProvider,
@@ -514,4 +509,4 @@ export {
   listRegisteredProviders,
   ProviderRouter
 };
-//# sourceMappingURL=chunk-SZPBJJWT.js.map
+//# sourceMappingURL=chunk-7PJJJTXS.js.map

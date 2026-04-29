@@ -1,4 +1,4 @@
-import type { ProviderID } from "./schema.js";
+import type { ProviderID } from "../schema.js";
 
 export type ProviderAuthType = "api" | "oauth" | "pool";
 
@@ -17,6 +17,7 @@ export interface OAuthCredential {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: string;
+  baseURL?: string;
   credentialLabel?: string;
 }
 

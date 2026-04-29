@@ -4,7 +4,7 @@ import {
   getBuiltInModel,
   getBuiltInProvider,
   toOpenAITools
-} from "./chunk-SZPBJJWT.js";
+} from "./chunk-7PJJJTXS.js";
 
 // src/provider/adapters/gemini.ts
 var GeminiProviderAdapter = class {
@@ -58,9 +58,12 @@ var OpenAICompatibleAdapter = class {
     const model = this.provider.models.find((item) => item.id === modelID);
     return model;
   }
+  get bearerToken() {
+    return this.credential.type === "oauth" ? this.credential.accessToken : this.credential.apiKey;
+  }
   buildHeaders() {
     return {
-      Authorization: `Bearer ${this.credential.apiKey}`,
+      Authorization: `Bearer ${this.bearerToken}`,
       "Content-Type": "application/json"
     };
   }
@@ -178,12 +181,11 @@ var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
     super(credential);
   }
   buildHeaders() {
-    return {
-      ...super.buildHeaders(),
-      ...this.credential.organization && {
-        "OpenAI-Organization": this.credential.organization
-      }
-    };
+    const headers = super.buildHeaders();
+    if (this.credential.type === "api" && this.credential.organization) {
+      headers["OpenAI-Organization"] = this.credential.organization;
+    }
+    return headers;
   }
 };
 
@@ -216,4 +218,4 @@ export {
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-CU4F45JL.js.map
+//# sourceMappingURL=chunk-7IKSYRI2.js.map

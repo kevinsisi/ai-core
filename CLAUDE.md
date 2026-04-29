@@ -17,7 +17,7 @@ src/
 ├── client/        GeminiClient + MultiProviderClient + provider-agnostic Tool schema/converters
 ├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
 ├── step-orchestration/ StepRunner + preferred-key planning + lease heartbeat
-├── provider/      Provider schema + auth + registry + adapters (Gemini / OpenAI / OpenRouter / OpenAI-compatible base) + router
+├── provider/      Provider schema + auth (types + OpenAI OAuth PKCE) + registry + adapters (Gemini / OpenAI / OpenRouter / OpenAI-compatible base) + router
 ├── version.ts     AI_CORE_VERSION
 └── index.ts       統一 re-export
 ```
@@ -124,7 +124,8 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/client` | GeminiClient, MultiProviderClient, StreamInterruptedError, Tool, FunctionTool, ProviderNativeTool, toGeminiTools, toOpenAITools, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 | `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
-| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, registerProvider/unregisterProvider/getProvider/getModel, ProviderRouter (with execute/executeStream), GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterProviderAdapter |
+| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, registerProvider/unregisterProvider/getProvider/getModel, ProviderRouter (with execute/executeStream), GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterProviderAdapter, startOpenAIAuth, refreshOpenAIToken, OpenAIOAuthError |
+| `@kevinsisi/ai-core/provider/auth` | OAuthCredential, ApiKeyCredential, PoolCredential, ProviderCredential, ProviderAuthType, startOpenAIAuth, refreshOpenAIToken, OpenAIOAuthError, StartOpenAIAuthOptions |
 
 ---
 

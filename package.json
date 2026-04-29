@@ -1,6 +1,6 @@
 {
   "name": "@kevinsisi/ai-core",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Shared AI modules for HomeProject — multi-provider runtime (OpenAI / OpenRouter / Gemini / custom) with provider-aware routing, streaming, and tools",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -41,6 +41,11 @@
       "types": "./dist/provider/index.d.ts",
       "import": "./dist/provider/index.js",
       "require": "./dist/provider/index.cjs"
+    },
+    "./provider/auth": {
+      "types": "./dist/provider/auth/index.d.ts",
+      "import": "./dist/provider/auth/index.js",
+      "require": "./dist/provider/auth/index.cjs"
     }
   },
   "files": [
