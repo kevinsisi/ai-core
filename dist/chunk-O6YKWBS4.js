@@ -95,6 +95,28 @@ var ProviderRouter = class {
   }
   adapters;
   select(policy = {}) {
+    return this.selectAdapter(policy).selection;
+  }
+  /**
+   * Select an adapter and execute generateContent against it.
+   *
+   * If the caller did not set `policy.preferredModel`, `params.model` is used
+   * as the model preference so the routing target matches the explicit request.
+   *
+   * No silent provider/model fallback: when the resolved selection picks a
+   * different model than the caller asked for, the policy must have opted in
+   * via `allowCrossProviderFallback` / `allowCrossModelFallback`.
+   */
+  async execute(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const response = await adapter.generateContent({ ...params, model: selection.model });
+    return { selection, response };
+  }
+  selectAdapter(policy) {
     const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
@@ -115,10 +137,13 @@ var ProviderRouter = class {
           const model = adapter.getModel(policy.preferredModel);
           if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
             return {
-              provider: providerID,
-              model: model.id,
-              credentialType: adapter.credential.type,
-              credentialRef: credentialRef(adapter)
+              adapter,
+              selection: {
+                provider: providerID,
+                model: model.id,
+                credentialType: adapter.credential.type,
+                credentialRef: credentialRef(adapter)
+              }
             };
           }
           if (!policy.allowCrossModelFallback) {
@@ -132,10 +157,13 @@ var ProviderRouter = class {
           continue;
         }
         return {
-          provider: providerID,
-          model: models[0].id,
-          credentialType: adapter.credential.type,
-          credentialRef: credentialRef(adapter)
+          adapter,
+          selection: {
+            provider: providerID,
+            model: models[0].id,
+            credentialType: adapter.credential.type,
+            credentialRef: credentialRef(adapter)
+          }
         };
       }
     }
@@ -246,4 +274,4 @@ export {
   GeminiProviderAdapter,
   OpenAIProviderAdapter
 };
-//# sourceMappingURL=chunk-ZAHFPLCJ.js.map
+//# sourceMappingURL=chunk-O6YKWBS4.js.map

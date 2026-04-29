@@ -4,5 +4,6 @@ export type { ApiKeyCredential, OAuthCredential, ProviderAuthType, ProviderCrede
 export { builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "./models.js";
 export type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 export { ProviderRouter } from "./router.js";
+export type { RoutedExecution } from "./router.js";
 export { GeminiProviderAdapter } from "./adapters/gemini.js";
 export { OpenAIProviderAdapter } from "./adapters/openai.js";

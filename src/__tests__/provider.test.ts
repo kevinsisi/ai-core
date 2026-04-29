@@ -170,6 +170,53 @@ describe("provider router", () => {
     ).toThrow(/No provider\/model combination/);
   });
 
+  it("execute() selects an adapter and runs generateContent against it", async () => {
+    const calls: GenerateParams[] = [];
+    const tracingOpenAI: ProviderAdapter = {
+      ...openAIAdapter,
+      generateContent: async (params) => {
+        calls.push(params);
+        return { text: "openai-response", usage: null };
+      },
+    };
+
+    const router = new ProviderRouter([geminiAdapter, tracingOpenAI]);
+    const result = await router.execute({ model: "gpt-4.1-mini", prompt: "hi" });
+
+    expect(result.selection.provider).toBe("openai");
+    expect(result.selection.model).toBe("gpt-4.1-mini");
+    expect(result.response.text).toBe("openai-response");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ model: "gpt-4.1-mini", prompt: "hi" });
+  });
+
+  it("execute() respects policy.preferredProviders over params.model provider", async () => {
+    const tracingGemini: ProviderAdapter = {
+      ...geminiAdapter,
+      generateContent: async () => ({ text: "gemini-response", usage: null }),
+    };
+
+    const router = new ProviderRouter([tracingGemini, openAIAdapter]);
+    const result = await router.execute(
+      { model: "gemini-2.5-flash", prompt: "hi" },
+      { preferredProviders: [ProviderID.Gemini] }
+    );
+
+    expect(result.selection.provider).toBe("gemini");
+    expect(result.response.text).toBe("gemini-response");
+  });
+
+  it("execute() does not silently fall back to a different model when policy disallows it", async () => {
+    const router = new ProviderRouter([geminiAdapter, openAIAdapter]);
+
+    await expect(
+      router.execute(
+        { model: "claude-opus-4-7", prompt: "hi" },
+        { preferredProviders: [ProviderID.OpenAI] }
+      )
+    ).rejects.toThrow(/No provider\/model combination/);
+  });
+
   it("selects the Gemini compatibility adapter with explicit pool credential reference", () => {
     const pool = new KeyPool(makeAdapter([makeKey(1, "g-key")]))
     const adapter = new GeminiProviderAdapter(pool);

@@ -83,10 +83,26 @@ interface RoutedProviderSelection {
     credentialRef: string;
 }
 
+interface RoutedExecution {
+    selection: RoutedProviderSelection;
+    response: GenerateResponse;
+}
 declare class ProviderRouter {
     private readonly adapters;
     constructor(adapters: ProviderAdapter[]);
     select(policy?: RoutePolicy): RoutedProviderSelection;
+    /**
+     * Select an adapter and execute generateContent against it.
+     *
+     * If the caller did not set `policy.preferredModel`, `params.model` is used
+     * as the model preference so the routing target matches the explicit request.
+     *
+     * No silent provider/model fallback: when the resolved selection picks a
+     * different model than the caller asked for, the policy must have opted in
+     * via `allowCrossProviderFallback` / `allowCrossModelFallback`.
+     */
+    execute(params: GenerateParams, policy?: RoutePolicy): Promise<RoutedExecution>;
+    private selectAdapter;
 }
 
 declare class GeminiProviderAdapter implements ProviderAdapter {
@@ -108,4 +124,4 @@ declare class OpenAIProviderAdapter implements ProviderAdapter {
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
 }
 
-export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedProviderSelection, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };
+export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };
