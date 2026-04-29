@@ -7,6 +7,7 @@ import { ProviderID } from "../provider/schema.js";
 import { defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "../provider/models.js";
 import { ProviderRouter } from "../provider/router.js";
 import { OpenAIProviderAdapter } from "../provider/adapters/openai.js";
+import { OpenRouterProviderAdapter } from "../provider/adapters/openrouter.js";
 import type { ProviderAdapter } from "../provider/types.js";
 
 function makeKey(id: number, key: string, overrides: Partial<ApiKey> = {}): ApiKey {
@@ -385,5 +386,91 @@ describe("openai provider adapter", () => {
         },
       },
     ]);
+  });
+});
+
+describe("openrouter provider adapter", () => {
+  it("hits the OpenRouter base URL and forwards attribution headers", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
+      capturedUrl = url;
+      capturedHeaders = init.headers;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok via openrouter" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenRouterProviderAdapter(
+      { type: "api", provider: "openrouter", apiKey: "or-key" },
+      { referer: "https://example.com", appTitle: "TestApp" }
+    );
+
+    const result = await adapter.generateContent({ model: "openrouter/auto", prompt: "hi" });
+
+    expect(capturedUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer or-key");
+    expect(capturedHeaders["HTTP-Referer"]).toBe("https://example.com");
+    expect(capturedHeaders["X-Title"]).toBe("TestApp");
+    expect(result.text).toBe("ok via openrouter");
+  });
+
+  it("exposes additionalModels alongside the built-in catalog without leaking globally", () => {
+    const adapter = new OpenRouterProviderAdapter(
+      { type: "api", provider: "openrouter", apiKey: "or-key" },
+      {
+        additionalModels: [
+          {
+            id: "anthropic/claude-sonnet-4.5",
+            provider: "openrouter",
+            name: "Claude Sonnet 4.5 via OpenRouter",
+            capabilities: {
+              streaming: true,
+              tools: true,
+              reasoning: true,
+              multimodalInput: true,
+              multimodalOutput: false,
+            },
+          },
+        ],
+      }
+    );
+
+    expect(adapter.supports("anthropic/claude-sonnet-4.5")).toBe(true);
+    // built-in catalog must remain unmodified
+    expect(getBuiltInProvider("openrouter")?.models.some(
+      (m) => m.id === "anthropic/claude-sonnet-4.5"
+    )).toBe(false);
+  });
+
+  it("only forwards openrouter-tagged native tools", async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
+      capturedBody = JSON.parse(init.body) as Record<string, unknown>;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenRouterProviderAdapter({
+      type: "api",
+      provider: "openrouter",
+      apiKey: "or-key",
+    });
+
+    await adapter.generateContent({
+      model: "openrouter/auto",
+      prompt: "hi",
+      tools: [
+        { type: "provider-native", provider: "openai", config: { type: "web_search_preview" } },
+        { type: "provider-native", provider: "openrouter", config: { type: "web_search" } },
+      ],
+    });
+
+    expect(capturedBody?.tools).toEqual([{ type: "web_search" }]);
   });
 });

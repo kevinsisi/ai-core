@@ -2,12 +2,13 @@ import {
   GeminiClient,
   StreamInterruptedError,
   toOpenAITools
-} from "./chunk-EWQCOK3X.js";
+} from "./chunk-H7NZ5RPG.js";
 
 // src/provider/schema.ts
 var ProviderID = {
   Gemini: "gemini",
-  OpenAI: "openai"
+  OpenAI: "openai",
+  OpenRouter: "openrouter"
 };
 
 // src/provider/models.ts
@@ -45,6 +46,23 @@ var openAIModels = [
     costTier: "medium"
   }
 ];
+var openRouterModels = [
+  {
+    id: "openrouter/auto",
+    provider: ProviderID.OpenRouter,
+    name: "OpenRouter Auto",
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: false,
+      multimodalInput: false,
+      multimodalOutput: false
+    },
+    contextWindow: 128e3,
+    outputLimit: 32768,
+    costTier: "medium"
+  }
+];
 var builtInProviders = [
   {
     id: ProviderID.OpenAI,
@@ -57,6 +75,12 @@ var builtInProviders = [
     name: "Gemini",
     authTypes: ["pool"],
     models: geminiModels
+  },
+  {
+    id: ProviderID.OpenRouter,
+    name: "OpenRouter",
+    authTypes: ["api"],
+    models: openRouterModels
   }
 ];
 var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
@@ -212,7 +236,7 @@ var GeminiProviderAdapter = class {
   }
 };
 
-// src/provider/adapters/openai.ts
+// src/provider/adapters/openai-compatible.ts
 function toOpenAIMessages(params) {
   const messages = [];
   if (params.systemInstruction) {
@@ -227,8 +251,7 @@ function toOpenAIMessages(params) {
   messages.push({ role: "user", content: params.prompt });
   return messages;
 }
-var OpenAIProviderAdapter = class {
-  provider = getBuiltInProvider("openai");
+var OpenAICompatibleAdapter = class {
   credential;
   constructor(credential) {
     this.credential = credential;
@@ -237,34 +260,45 @@ var OpenAIProviderAdapter = class {
     return this.provider.models.some((model) => model.id === modelID);
   }
   getModel(modelID) {
-    const model = getBuiltInModel(modelID);
-    if (!model || model.provider !== this.provider.id) return void 0;
+    const model = this.provider.models.find((item) => item.id === modelID);
     return model;
+  }
+  buildHeaders() {
+    return {
+      Authorization: `Bearer ${this.credential.apiKey}`,
+      "Content-Type": "application/json"
+    };
+  }
+  get baseURL() {
+    return this.credential.baseURL ?? this.defaultBaseURL;
+  }
+  buildRequestBody(params, stream) {
+    const model = params.model || this.provider.models[0].id;
+    const tools = toOpenAITools(params.tools, this.nativeToolProvider);
+    return {
+      model,
+      messages: toOpenAIMessages(params),
+      ...tools && { tools },
+      ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens },
+      ...stream && { stream: true }
+    };
   }
   async generateContent(params) {
     if (params.images?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
+      throw new Error(
+        `${this.provider.name} adapter does not support multimodal input yet`
+      );
     }
-    const model = params.model || this.provider.models[0].id;
-    const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
-    const openAITools = toOpenAITools(params.tools);
-    const response = await fetch(`${baseURL}/chat/completions`, {
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.credential.apiKey}`,
-        "Content-Type": "application/json",
-        ...this.credential.organization && { "OpenAI-Organization": this.credential.organization }
-      },
-      body: JSON.stringify({
-        model,
-        messages: toOpenAIMessages(params),
-        ...openAITools && { tools: openAITools },
-        ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens }
-      })
+      headers: this.buildHeaders(),
+      body: JSON.stringify(this.buildRequestBody(params, false))
     });
     if (!response.ok) {
       const text2 = await response.text();
-      const error = new Error(text2 || `OpenAI request failed with status ${response.status}`);
+      const error = new Error(
+        text2 || `${this.provider.name} request failed with status ${response.status}`
+      );
       error.status = response.status;
       throw error;
     }
@@ -282,35 +316,25 @@ var OpenAIProviderAdapter = class {
   }
   async *streamContent(params) {
     if (params.images?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
+      throw new Error(
+        `${this.provider.name} adapter does not support multimodal input yet`
+      );
     }
-    const model = params.model || this.provider.models[0].id;
-    const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
-    const openAITools = toOpenAITools(params.tools);
-    const response = await fetch(`${baseURL}/chat/completions`, {
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.credential.apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        ...this.credential.organization && { "OpenAI-Organization": this.credential.organization }
-      },
-      body: JSON.stringify({
-        model,
-        messages: toOpenAIMessages(params),
-        ...openAITools && { tools: openAITools },
-        ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens },
-        stream: true
-      })
+      headers: { ...this.buildHeaders(), Accept: "text/event-stream" },
+      body: JSON.stringify(this.buildRequestBody(params, true))
     });
     if (!response.ok) {
       const text = await response.text();
-      const error = new Error(text || `OpenAI stream request failed with status ${response.status}`);
+      const error = new Error(
+        text || `${this.provider.name} stream request failed with status ${response.status}`
+      );
       error.status = response.status;
       throw error;
     }
     if (!response.body) {
-      throw new Error("OpenAI stream response has no body");
+      throw new Error(`${this.provider.name} stream response has no body`);
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -350,6 +374,47 @@ var OpenAIProviderAdapter = class {
   }
 };
 
+// src/provider/adapters/openai.ts
+var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
+  provider = getBuiltInProvider("openai");
+  defaultBaseURL = "https://api.openai.com/v1";
+  nativeToolProvider = "openai";
+  constructor(credential) {
+    super(credential);
+  }
+  buildHeaders() {
+    return {
+      ...super.buildHeaders(),
+      ...this.credential.organization && {
+        "OpenAI-Organization": this.credential.organization
+      }
+    };
+  }
+};
+
+// src/provider/adapters/openrouter.ts
+var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
+  provider;
+  defaultBaseURL = "https://openrouter.ai/api/v1";
+  nativeToolProvider = "openrouter";
+  referer;
+  appTitle;
+  constructor(credential, options = {}) {
+    super(credential);
+    const base = getBuiltInProvider("openrouter");
+    this.provider = options.additionalModels?.length ? { ...base, models: [...base.models, ...options.additionalModels] } : base;
+    this.referer = options.referer;
+    this.appTitle = options.appTitle;
+  }
+  buildHeaders() {
+    return {
+      ...super.buildHeaders(),
+      ...this.referer && { "HTTP-Referer": this.referer },
+      ...this.appTitle && { "X-Title": this.appTitle }
+    };
+  }
+};
+
 export {
   ProviderID,
   builtInProviders,
@@ -358,6 +423,8 @@ export {
   getBuiltInModel,
   ProviderRouter,
   GeminiProviderAdapter,
-  OpenAIProviderAdapter
+  OpenAICompatibleAdapter,
+  OpenAIProviderAdapter,
+  OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-MAL7GISX.js.map
+//# sourceMappingURL=chunk-ETKQQOIL.js.map

@@ -4,6 +4,7 @@ import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
 declare const ProviderID: {
     readonly Gemini: "gemini";
     readonly OpenAI: "openai";
+    readonly OpenRouter: "openrouter";
 };
 type ProviderID = (typeof ProviderID)[keyof typeof ProviderID];
 type ModelID = string;
@@ -130,14 +131,61 @@ declare class GeminiProviderAdapter implements ProviderAdapter {
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
-declare class OpenAIProviderAdapter implements ProviderAdapter {
-    readonly provider: ProviderDefinition;
+/**
+ * Shared transport for OpenAI-style /chat/completions endpoints.
+ *
+ * Subclasses provide the provider definition, default base URL, and any
+ * additional headers (OpenRouter app attribution, organization scoping, etc.).
+ * Tool conversion is keyed off `nativeToolProvider` so each subclass passes
+ * through its own `provider-native` tools while still ignoring foreign ones.
+ */
+declare abstract class OpenAICompatibleAdapter implements ProviderAdapter {
+    abstract readonly provider: ProviderDefinition;
     readonly credential: ApiKeyCredential;
+    protected abstract readonly defaultBaseURL: string;
+    protected abstract readonly nativeToolProvider: string;
     constructor(credential: ApiKeyCredential);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
+    protected buildHeaders(): Record<string, string>;
+    protected get baseURL(): string;
+    private buildRequestBody;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
-export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAIProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, type RoutedStream, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };
+declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
+    readonly provider: ProviderDefinition;
+    protected readonly defaultBaseURL = "https://api.openai.com/v1";
+    protected readonly nativeToolProvider = "openai";
+    constructor(credential: ApiKeyCredential);
+    protected buildHeaders(): Record<string, string>;
+}
+
+interface OpenRouterAdapterOptions {
+    /** Optional list of model definitions to expose beyond the built-in catalog. */
+    additionalModels?: ModelDefinition[];
+    /** OpenRouter app attribution header (`HTTP-Referer`). */
+    referer?: string;
+    /** OpenRouter app attribution header (`X-Title`). */
+    appTitle?: string;
+}
+/**
+ * OpenRouter exposes an OpenAI-compatible /chat/completions endpoint plus its
+ * own catalog of upstream models (anthropic/*, google/*, openai/*, etc.).
+ *
+ * Consumers usually want models beyond `openrouter/auto`; pass them via
+ * `additionalModels` so the router can route to them. The provider definition
+ * is shallow-cloned so additions do not leak into the built-in catalog.
+ */
+declare class OpenRouterProviderAdapter extends OpenAICompatibleAdapter {
+    readonly provider: ProviderDefinition;
+    protected readonly defaultBaseURL = "https://openrouter.ai/api/v1";
+    protected readonly nativeToolProvider = "openrouter";
+    private readonly referer?;
+    private readonly appTitle?;
+    constructor(credential: ApiKeyCredential, options?: OpenRouterAdapterOptions);
+    protected buildHeaders(): Record<string, string>;
+}
+
+export { type ApiKeyCredential, GeminiProviderAdapter, type ModelDefinition, type ModelID, type OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, type ProviderAdapter, type ProviderAuthType, type ProviderCapabilities, type ProviderCredential, type ProviderDefinition, ProviderID, ProviderRouter, type RoutePolicy, type RoutedExecution, type RoutedProviderSelection, type RoutedStream, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider };

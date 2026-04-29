@@ -1,6 +1,7 @@
 export const ProviderID = {
   Gemini: "gemini",
   OpenAI: "openai",
+  OpenRouter: "openrouter",
 } as const;
 
 export type ProviderID = (typeof ProviderID)[keyof typeof ProviderID];

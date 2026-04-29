@@ -6,4 +6,7 @@ export type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./ty
 export { ProviderRouter } from "./router.js";
 export type { RoutedExecution, RoutedStream } from "./router.js";
 export { GeminiProviderAdapter } from "./adapters/gemini.js";
+export { OpenAICompatibleAdapter } from "./adapters/openai-compatible.js";
 export { OpenAIProviderAdapter } from "./adapters/openai.js";
+export { OpenRouterProviderAdapter } from "./adapters/openrouter.js";
+export type { OpenRouterAdapterOptions } from "./adapters/openrouter.js";

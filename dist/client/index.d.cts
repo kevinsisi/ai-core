@@ -46,10 +46,14 @@ declare function toGeminiTools(tools: Tool[] | undefined): Tool$1[] | undefined;
  * Convert provider-agnostic Tool[] into OpenAI Chat Completions `tools` shape.
  *
  * - FunctionTool entries map to `{ type: "function", function: { name, description, parameters } }`.
- * - ProviderNativeTool entries with provider="openai" are spread in as-is
- *   (config is treated as a literal OpenAI tool entry).
- * - ProviderNativeTool entries targeting other providers are skipped.
+ * - ProviderNativeTool entries whose `provider` matches `nativeToolProvider`
+ *   are spread in as-is (config is treated as a literal OpenAI-shape entry).
+ * - ProviderNativeTool entries targeting any other provider are skipped.
+ *
+ * The `nativeToolProvider` parameter lets OpenAI-compatible transports
+ * (OpenRouter, Azure OpenAI, etc.) accept their own native escape hatch
+ * without picking up tools intended for upstream OpenAI.
  */
-declare function toOpenAITools(tools: Tool[] | undefined): Array<Record<string, unknown>> | undefined;
+declare function toOpenAITools(tools: Tool[] | undefined, nativeToolProvider?: string): Array<Record<string, unknown>> | undefined;
 
 export { ClientOptions, GeminiClient, GenerateParams, GenerateResponse, Tool, toGeminiTools, toOpenAITools };

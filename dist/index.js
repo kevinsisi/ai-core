@@ -4,20 +4,22 @@ import {
 import "./chunk-EYAB537W.js";
 import {
   GeminiProviderAdapter,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,
   builtInProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "./chunk-MAL7GISX.js";
+} from "./chunk-ETKQQOIL.js";
 import {
   GeminiClient,
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools
-} from "./chunk-EWQCOK3X.js";
+} from "./chunk-H7NZ5RPG.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -44,7 +46,9 @@ export {
   LeaseHeartbeat,
   MaxRetriesExceededError,
   NoAvailableKeyError,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,
   SqliteAdapter,

@@ -25,7 +25,7 @@ function toGeminiTools(tools) {
   result.push(...passThrough);
   return result.length > 0 ? result : void 0;
 }
-function toOpenAITools(tools) {
+function toOpenAITools(tools, nativeToolProvider = "openai") {
   if (!tools || tools.length === 0) return void 0;
   const result = [];
   for (const tool of tools) {
@@ -38,7 +38,7 @@ function toOpenAITools(tools) {
           ...tool.parameters !== void 0 && { parameters: tool.parameters }
         }
       });
-    } else if (tool.type === "provider-native" && tool.provider === "openai") {
+    } else if (tool.type === "provider-native" && tool.provider === nativeToolProvider) {
       result.push(tool.config);
     }
   }
@@ -265,4 +265,4 @@ export {
   StreamInterruptedError,
   GeminiClient
 };
-//# sourceMappingURL=chunk-EWQCOK3X.js.map
+//# sourceMappingURL=chunk-H7NZ5RPG.js.map

@@ -59,7 +59,9 @@ export {
   getBuiltInProvider,
   ProviderRouter,
   GeminiProviderAdapter,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
 } from "./provider/index.js";
 export type {
   ApiKeyCredential,
@@ -73,4 +75,5 @@ export type {
   ProviderAdapter,
   RoutePolicy,
   RoutedProviderSelection,
+  OpenRouterAdapterOptions,
 } from "./provider/index.js";

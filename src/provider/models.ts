@@ -36,6 +36,24 @@ const openAIModels = [
   },
 ];
 
+const openRouterModels = [
+  {
+    id: "openrouter/auto",
+    provider: ProviderID.OpenRouter,
+    name: "OpenRouter Auto",
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: false,
+      multimodalInput: false,
+      multimodalOutput: false,
+    },
+    contextWindow: 128_000,
+    outputLimit: 32_768,
+    costTier: "medium" as const,
+  },
+];
+
 export const builtInProviders: ProviderDefinition[] = [
   {
     id: ProviderID.OpenAI,
@@ -48,6 +66,12 @@ export const builtInProviders: ProviderDefinition[] = [
     name: "Gemini",
     authTypes: ["pool"],
     models: geminiModels,
+  },
+  {
+    id: ProviderID.OpenRouter,
+    name: "OpenRouter",
+    authTypes: ["api"],
+    models: openRouterModels,
   },
 ];
 
