@@ -4,7 +4,7 @@ import {
   getBuiltInModel,
   getBuiltInProvider,
   toOpenAITools
-} from "./chunk-PWSNKNQE.js";
+} from "./chunk-SZPBJJWT.js";
 
 // src/provider/adapters/gemini.ts
 var GeminiProviderAdapter = class {
@@ -216,4 +216,4 @@ export {
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-QMXQZLSJ.js.map
+//# sourceMappingURL=chunk-CU4F45JL.js.map

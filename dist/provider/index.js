@@ -3,7 +3,7 @@ import {
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
-} from "../chunk-QMXQZLSJ.js";
+} from "../chunk-CU4F45JL.js";
 import {
   ProviderID,
   ProviderRouter,
@@ -17,8 +17,8 @@ import {
   listRegisteredProviders,
   registerProvider,
   unregisterProvider
-} from "../chunk-PWSNKNQE.js";
-import "../chunk-4UUUL6JJ.js";
+} from "../chunk-SZPBJJWT.js";
+import "../chunk-VOOZSXX5.js";
 import "../chunk-NHGYIXGT.js";
 export {
   GeminiProviderAdapter,
