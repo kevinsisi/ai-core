@@ -1,6 +1,5 @@
-import { G as GenerateParams, b as GenerateResponse } from '../types-DPIsmmhM.js';
+import { G as GenerateParams, b as GenerateResponse } from '../types-DP2JVUqN.js';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
-import '@google/generative-ai';
 
 declare const ProviderID: {
     readonly Gemini: "gemini";

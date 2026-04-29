@@ -331,7 +331,7 @@ describe("GeminiClient multimodal", () => {
     expect(chunks).toEqual(["streamed"]);
   });
 
-  it("3.5: tools field is passed to getGenerativeModel", async () => {
+  it("3.5: function tools are converted to Gemini functionDeclarations", async () => {
     const { GoogleGenerativeAI, __mocks } = await import(
       "@google/generative-ai"
     ) as any;
@@ -339,16 +339,43 @@ describe("GeminiClient multimodal", () => {
 
     const pool = makePool([makeKey(1, "key-a")]);
     const client = new GeminiClient(pool);
-    const tools = [{ googleSearchRetrieval: {} }] as any;
     await client.generateContent({
       model: "gemini-2.5-flash",
       prompt: "search",
-      tools,
+      tools: [
+        { type: "function", name: "search", description: "search the web" },
+      ],
     });
 
     const instance = (GoogleGenerativeAI as any).mock.results[0].value;
     expect(instance.getGenerativeModel).toHaveBeenCalledWith(
-      expect.objectContaining({ tools })
+      expect.objectContaining({
+        tools: [
+          { functionDeclarations: [{ name: "search", description: "search the web" }] },
+        ],
+      })
+    );
+  });
+
+  it("3.6: provider-native gemini tools are passed through verbatim", async () => {
+    const { GoogleGenerativeAI, __mocks } = await import(
+      "@google/generative-ai"
+    ) as any;
+    __mocks.mockGenerate.mockResolvedValue(makeSuccessResponse("grounding ok"));
+
+    const pool = makePool([makeKey(1, "key-a")]);
+    const client = new GeminiClient(pool);
+    await client.generateContent({
+      model: "gemini-2.5-flash",
+      prompt: "ground me",
+      tools: [
+        { type: "provider-native", provider: "gemini", config: { googleSearch: {} } },
+      ],
+    });
+
+    const instance = (GoogleGenerativeAI as any).mock.results[0].value;
+    expect(instance.getGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({ tools: [{ googleSearch: {} }] })
     );
   });
 });

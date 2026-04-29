@@ -1,3 +1,4 @@
+import { toOpenAITools } from "../../client/tool-conversion.js";
 import type { GenerateParams, GenerateResponse } from "../../client/types.js";
 import type { ApiKeyCredential } from "../auth.js";
 import { getBuiltInModel, getBuiltInProvider } from "../models.js";
@@ -58,12 +59,9 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
       throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
     }
 
-    if (params.tools?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support tools yet");
-    }
-
     const model = params.model || this.provider.models[0].id;
     const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
+    const openAITools = toOpenAITools(params.tools);
 
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
@@ -75,6 +73,7 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
       body: JSON.stringify({
         model,
         messages: toOpenAIMessages(params),
+        ...(openAITools && { tools: openAITools }),
         ...(params.maxOutputTokens && { max_tokens: params.maxOutputTokens }),
       }),
     });

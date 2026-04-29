@@ -259,7 +259,7 @@ describe("openai provider adapter", () => {
     expect(result.usage?.totalTokens).toBe(15);
   });
 
-  it("rejects unsupported multimodal or tools input in phase 1", async () => {
+  it("rejects unsupported multimodal input in phase 1", async () => {
     const adapter = new OpenAIProviderAdapter({
       type: "api",
       provider: "openai",
@@ -273,13 +273,52 @@ describe("openai provider adapter", () => {
         images: [{ type: "inline", mimeType: "image/png", data: "abc" }],
       })
     ).rejects.toThrow(/multimodal/);
+  });
 
-    await expect(
-      adapter.generateContent({
-        model: "gpt-4.1-mini",
-        prompt: "hello",
-        tools: [{} as never],
-      })
-    ).rejects.toThrow(/tools/);
+  it("forwards function tools to OpenAI in the chat completions tools format", async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
+      capturedBody = JSON.parse(init.body) as Record<string, unknown>;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "test-key",
+    });
+
+    await adapter.generateContent({
+      model: "gpt-4.1-mini",
+      prompt: "hi",
+      tools: [
+        {
+          type: "function",
+          name: "lookup_weather",
+          description: "Look up the weather",
+          parameters: { type: "object", properties: { city: { type: "string" } } },
+        },
+        {
+          type: "provider-native",
+          provider: "gemini",
+          config: { googleSearch: {} },
+        },
+      ],
+    });
+
+    expect(capturedBody?.tools).toEqual([
+      {
+        type: "function",
+        function: {
+          name: "lookup_weather",
+          description: "Look up the weather",
+          parameters: { type: "object", properties: { city: { type: "string" } } },
+        },
+      },
+    ]);
   });
 });

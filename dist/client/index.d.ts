@@ -1,7 +1,7 @@
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
-import { a as ClientOptions, G as GenerateParams, b as GenerateResponse } from '../types-DPIsmmhM.js';
-export { C as ChatMessage, S as StreamInterruptedError, T as TokenUsage } from '../types-DPIsmmhM.js';
-import '@google/generative-ai';
+import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, c as Tool } from '../types-DP2JVUqN.js';
+export { C as ChatMessage, F as FunctionTool, P as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage } from '../types-DP2JVUqN.js';
+import { Tool as Tool$1 } from '@google/generative-ai';
 
 /**
  * Thin wrapper around @google/generative-ai that handles:
@@ -29,4 +29,27 @@ declare class GeminiClient {
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
-export { ClientOptions, GeminiClient, GenerateParams, GenerateResponse };
+/**
+ * Convert provider-agnostic Tool[] into Gemini's Tool[] shape.
+ *
+ * - All FunctionTool entries are grouped into a single `functionDeclarations` block.
+ * - ProviderNativeTool entries with provider="gemini" are spread in as-is
+ *   (their `config` payload is treated as a literal Gemini Tool, e.g.
+ *   `{ googleSearch: {} }`).
+ * - ProviderNativeTool entries targeting other providers are skipped.
+ *
+ * Returns `undefined` (not `[]`) when no Gemini-applicable tool is present, so
+ * callers can omit the `tools` field from `getGenerativeModel()` entirely.
+ */
+declare function toGeminiTools(tools: Tool[] | undefined): Tool$1[] | undefined;
+/**
+ * Convert provider-agnostic Tool[] into OpenAI Chat Completions `tools` shape.
+ *
+ * - FunctionTool entries map to `{ type: "function", function: { name, description, parameters } }`.
+ * - ProviderNativeTool entries with provider="openai" are spread in as-is
+ *   (config is treated as a literal OpenAI tool entry).
+ * - ProviderNativeTool entries targeting other providers are skipped.
+ */
+declare function toOpenAITools(tools: Tool[] | undefined): Array<Record<string, unknown>> | undefined;
+
+export { ClientOptions, GeminiClient, GenerateParams, GenerateResponse, Tool, toGeminiTools, toOpenAITools };

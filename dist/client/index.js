@@ -1,12 +1,16 @@
-import "../chunk-33KXZGPC.js";
+import "../chunk-EYAB537W.js";
 import {
   GeminiClient,
-  StreamInterruptedError
-} from "../chunk-QZBKFRLG.js";
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools
+} from "../chunk-EWQCOK3X.js";
 import "../chunk-6YVUQYI5.js";
 import "../chunk-NHGYIXGT.js";
 export {
   GeminiClient,
-  StreamInterruptedError
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools
 };
 //# sourceMappingURL=index.js.map

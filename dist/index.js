@@ -1,7 +1,7 @@
 import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
-import "./chunk-33KXZGPC.js";
+import "./chunk-EYAB537W.js";
 import {
   GeminiProviderAdapter,
   OpenAIProviderAdapter,
@@ -11,11 +11,13 @@ import {
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider
-} from "./chunk-O6YKWBS4.js";
+} from "./chunk-4SYAYCGY.js";
 import {
   GeminiClient,
-  StreamInterruptedError
-} from "./chunk-QZBKFRLG.js";
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools
+} from "./chunk-EWQCOK3X.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -54,6 +56,8 @@ export {
   getBuiltInModel,
   getBuiltInProvider,
   planPreferredKeys,
+  toGeminiTools,
+  toOpenAITools,
   withRetry
 };
 //# sourceMappingURL=index.js.map

@@ -1,6 +1,7 @@
 import {
-  GeminiClient
-} from "./chunk-QZBKFRLG.js";
+  GeminiClient,
+  toOpenAITools
+} from "./chunk-EWQCOK3X.js";
 
 // src/provider/schema.ts
 var ProviderID = {
@@ -226,11 +227,9 @@ var OpenAIProviderAdapter = class {
     if (params.images?.length) {
       throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
     }
-    if (params.tools?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support tools yet");
-    }
     const model = params.model || this.provider.models[0].id;
     const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
+    const openAITools = toOpenAITools(params.tools);
     const response = await fetch(`${baseURL}/chat/completions`, {
       method: "POST",
       headers: {
@@ -241,6 +240,7 @@ var OpenAIProviderAdapter = class {
       body: JSON.stringify({
         model,
         messages: toOpenAIMessages(params),
+        ...openAITools && { tools: openAITools },
         ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens }
       })
     });
@@ -274,4 +274,4 @@ export {
   GeminiProviderAdapter,
   OpenAIProviderAdapter
 };
-//# sourceMappingURL=chunk-O6YKWBS4.js.map
+//# sourceMappingURL=chunk-4SYAYCGY.js.map

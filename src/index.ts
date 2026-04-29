@@ -12,13 +12,16 @@ export { withRetry, classifyError, MaxRetriesExceededError } from "./retry/index
 export type { ErrorClass, RetryOptions, RetryEvent } from "./retry/index.js";
 
 // Client
-export { GeminiClient, StreamInterruptedError } from "./client/index.js";
+export { GeminiClient, StreamInterruptedError, toGeminiTools, toOpenAITools } from "./client/index.js";
 export type {
   GenerateParams,
   GenerateResponse,
   ChatMessage,
   TokenUsage,
   ClientOptions,
+  Tool,
+  FunctionTool,
+  ProviderNativeTool,
 } from "./client/index.js";
 
 // Agent runtime

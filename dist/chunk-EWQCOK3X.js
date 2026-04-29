@@ -2,6 +2,49 @@ import {
   withRetry
 } from "./chunk-6YVUQYI5.js";
 
+// src/client/tool-conversion.ts
+function toGeminiTools(tools) {
+  if (!tools || tools.length === 0) return void 0;
+  const functionDeclarations = [];
+  const passThrough = [];
+  for (const tool of tools) {
+    if (tool.type === "function") {
+      functionDeclarations.push({
+        name: tool.name,
+        ...tool.description !== void 0 && { description: tool.description },
+        ...tool.parameters !== void 0 && { parameters: tool.parameters }
+      });
+    } else if (tool.type === "provider-native" && tool.provider === "gemini") {
+      passThrough.push(tool.config);
+    }
+  }
+  const result = [];
+  if (functionDeclarations.length > 0) {
+    result.push({ functionDeclarations });
+  }
+  result.push(...passThrough);
+  return result.length > 0 ? result : void 0;
+}
+function toOpenAITools(tools) {
+  if (!tools || tools.length === 0) return void 0;
+  const result = [];
+  for (const tool of tools) {
+    if (tool.type === "function") {
+      result.push({
+        type: "function",
+        function: {
+          name: tool.name,
+          ...tool.description !== void 0 && { description: tool.description },
+          ...tool.parameters !== void 0 && { parameters: tool.parameters }
+        }
+      });
+    } else if (tool.type === "provider-native" && tool.provider === "openai") {
+      result.push(tool.config);
+    }
+  }
+  return result.length > 0 ? result : void 0;
+}
+
 // src/client/types.ts
 var StreamInterruptedError = class extends Error {
   chunksReceived;
@@ -102,12 +145,13 @@ var GeminiClient = class {
             heartbeatKey = apiKey;
           }
           const genai = new GoogleGenerativeAI(apiKey);
+          const geminiTools = toGeminiTools(params.tools);
           const model = genai.getGenerativeModel({
             model: params.model,
             ...params.systemInstruction && {
               systemInstruction: params.systemInstruction
             },
-            ...params.tools && { tools: params.tools },
+            ...geminiTools && { tools: geminiTools },
             ...params.maxOutputTokens && {
               generationConfig: { maxOutputTokens: params.maxOutputTokens }
             }
@@ -179,12 +223,13 @@ var GeminiClient = class {
     const heartbeat = this.startLeaseHeartbeat(key);
     try {
       const genai = new GoogleGenerativeAI(key);
+      const geminiTools = toGeminiTools(params.tools);
       const model = genai.getGenerativeModel({
         model: params.model,
         ...params.systemInstruction && {
           systemInstruction: params.systemInstruction
         },
-        ...params.tools && { tools: params.tools }
+        ...geminiTools && { tools: geminiTools }
       });
       const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
       const result = await model.generateContentStream(content);
@@ -215,7 +260,9 @@ var GeminiClient = class {
 };
 
 export {
+  toGeminiTools,
+  toOpenAITools,
   StreamInterruptedError,
   GeminiClient
 };
-//# sourceMappingURL=chunk-QZBKFRLG.js.map
+//# sourceMappingURL=chunk-EWQCOK3X.js.map
