@@ -1,14 +1,17 @@
-import "../chunk-EYAB537W.js";
+import {
+  MultiProviderClient
+} from "../chunk-UQCO7H7A.js";
 import {
   GeminiClient,
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools
-} from "../chunk-QZIQCWBR.js";
+} from "../chunk-PWSNKNQE.js";
 import "../chunk-4UUUL6JJ.js";
 import "../chunk-NHGYIXGT.js";
 export {
   GeminiClient,
+  MultiProviderClient,
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools

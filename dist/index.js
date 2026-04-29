@@ -1,14 +1,20 @@
 import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
-import "./chunk-EYAB537W.js";
+import {
+  MultiProviderClient
+} from "./chunk-UQCO7H7A.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
-  OpenRouterProviderAdapter,
+  OpenRouterProviderAdapter
+} from "./chunk-QMXQZLSJ.js";
+import {
+  GeminiClient,
   ProviderID,
   ProviderRouter,
+  StreamInterruptedError,
   builtInProviders,
   clearRegisteredProviders,
   defaultProviderPriority,
@@ -18,14 +24,10 @@ import {
   getProvider,
   listRegisteredProviders,
   registerProvider,
-  unregisterProvider
-} from "./chunk-O2WTSILY.js";
-import {
-  GeminiClient,
-  StreamInterruptedError,
   toGeminiTools,
-  toOpenAITools
-} from "./chunk-QZIQCWBR.js";
+  toOpenAITools,
+  unregisterProvider
+} from "./chunk-PWSNKNQE.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -56,6 +58,7 @@ export {
   KeyPool,
   LeaseHeartbeat,
   MaxRetriesExceededError,
+  MultiProviderClient,
   NoAvailableKeyError,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,

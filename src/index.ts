@@ -21,13 +21,20 @@ export {
 export type { ErrorClass, RetryOptions, RetryEvent, ProviderErrorClassifier } from "./retry/index.js";
 
 // Client
-export { GeminiClient, StreamInterruptedError, toGeminiTools, toOpenAITools } from "./client/index.js";
+export {
+  GeminiClient,
+  MultiProviderClient,
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools,
+} from "./client/index.js";
 export type {
   GenerateParams,
   GenerateResponse,
   ChatMessage,
   TokenUsage,
   ClientOptions,
+  MultiProviderClientOptions,
   Tool,
   FunctionTool,
   ProviderNativeTool,
