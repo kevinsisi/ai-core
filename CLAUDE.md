@@ -2,7 +2,7 @@
 
 ## 專案用途
 
-共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware runtime primitives、OpenAI-first routing foundation、Gemini 相容層、retry 邏輯，以及 GeminiClient 封裝。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
+共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware multi-provider runtime（Gemini / OpenAI / OpenRouter / 自訂 provider）、OpenAI-first routing、Gemini 相容層、per-provider 錯誤分類 retry、`MultiProviderClient` 與 `GeminiClient` 兩條入口，以及 provider-agnostic tool schema。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
 
 **消費者專案：** mind-diary、project-bridge、auto-spec-test、sheet-to-car
 
@@ -13,11 +13,12 @@
 ```
 src/
 ├── key-pool/      KeyPool + StorageAdapter + SqliteAdapter
-├── retry/         withRetry + classifyError
-├── client/        GeminiClient
+├── retry/         withRetry + per-provider error classifier registry
+├── client/        GeminiClient + MultiProviderClient + provider-agnostic Tool schema/converters
 ├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
 ├── step-orchestration/ StepRunner + preferred-key planning + lease heartbeat
-├── provider/      Provider schema + auth + registry + adapters + router
+├── provider/      Provider schema + auth + registry + adapters (Gemini / OpenAI / OpenRouter / OpenAI-compatible base) + router
+├── version.ts     AI_CORE_VERSION
 └── index.ts       統一 re-export
 ```
 
@@ -48,7 +49,7 @@ interface StorageAdapter {
 
 ### withRetry
 
-Gemini-aware retry 裝飾器，自動分類錯誤並處理 quota / rate-limit / network 三種退避策略：
+Provider-aware retry 裝飾器，透過 per-provider classifier registry 自動分類錯誤並處理 quota / rate-limit / network 三種退避策略。內建 Gemini 與 OpenAI classifier，自訂 provider 可用 `registerProviderClassifier` 注入：
 
 ```ts
 import { withRetry } from '@kevinsisi/ai-core/retry';
@@ -90,6 +91,26 @@ const { text } = await client.generateContent({
   images: [{ type: 'inline', mimeType: 'image/png', data: base64Data }],
 });
 ```
+
+### MultiProviderClient
+
+多 provider 入口，依 model id 透過 `ProviderRouter` 選 provider 並分派 `generateContent` / `streamContent`。預設 provider 優先序為 OpenAI → Gemini → OpenRouter，可由消費者用 routing policy 調整或注入自訂 provider：
+
+```ts
+import { MultiProviderClient } from '@kevinsisi/ai-core/client';
+import { ProviderRouter } from '@kevinsisi/ai-core/provider';
+
+const router = new ProviderRouter({ /* policy + credentials */ });
+const client = new MultiProviderClient(router);
+
+const { text } = await client.generateContent({
+  model: 'gpt-4o-mini',
+  prompt: 'Hello',
+  tools: [/* provider-agnostic Tool */],
+});
+```
+
+跨 provider fallback 不會靜默發生；必須由 routing policy 顯式開啟。當無可用 provider 時仍維持嚴格錯誤契約。
 
 ---
 
@@ -133,10 +154,10 @@ const { text } = await client.generateContent({
 - **禁止 fallback 行為**：key 不足時直接 throw `NoAvailableKeyError`，不可靜默降級
 - **禁止 hardcode 任何 API key 或憑證**。
 - Gemini pool-backed key 由 `StorageAdapter` 提供。
-- phase 1 provider-aware adapters 可接受 consumer-supplied provider-specific credentials，但仍不得硬編碼在 library 內。
+- Provider adapters 可接受 consumer-supplied provider-specific credentials（OpenAI / OpenRouter / 自訂 provider 透過 `registerProvider` 註冊），但仍不得硬編碼在 library 內。
 - `console.*` 僅允許 `console.warn` / `console.error`，不可用 `console.log`
 - `step-orchestration` 只提供 generic orchestration primitives，不可吸收 consumer app 的 prompt wording、domain rule、或 product workflow decision
-- provider-aware routing 必須維持既有 Gemini-only consumer 的 no-silent-fallback 契約；phase 1 的 Gemini adapter 為 pool-backed compatibility adapter，OpenAI 為預設優先 provider，跨 model/provider fallback 必須由顯式 policy 開啟
+- provider-aware routing 必須維持既有 Gemini-only consumer 的 no-silent-fallback 契約；Gemini adapter 為 pool-backed compatibility adapter，OpenAI 為預設優先 provider，跨 model/provider fallback 必須由顯式 routing policy 開啟
 
 ---
 
