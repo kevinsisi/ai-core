@@ -1,24 +1,41 @@
 import {
   GeminiProviderAdapter,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter
+} from "../chunk-QMXQZLSJ.js";
+import {
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
-  getBuiltInProvider
-} from "../chunk-ZAHFPLCJ.js";
-import "../chunk-QZBKFRLG.js";
-import "../chunk-6YVUQYI5.js";
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider
+} from "../chunk-PWSNKNQE.js";
+import "../chunk-4UUUL6JJ.js";
 import "../chunk-NHGYIXGT.js";
 export {
   GeminiProviderAdapter,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,
   builtInProviders,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
-  getBuiltInProvider
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  unregisterProvider
 };
 //# sourceMappingURL=index.js.map

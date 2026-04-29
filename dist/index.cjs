@@ -20,14 +20,18 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  AI_CORE_VERSION: () => AI_CORE_VERSION,
   AgentRuntime: () => AgentRuntime,
   GeminiClient: () => GeminiClient,
   GeminiProviderAdapter: () => GeminiProviderAdapter,
   KeyPool: () => KeyPool,
   LeaseHeartbeat: () => LeaseHeartbeat,
   MaxRetriesExceededError: () => MaxRetriesExceededError,
+  MultiProviderClient: () => MultiProviderClient,
   NoAvailableKeyError: () => NoAvailableKeyError,
+  OpenAICompatibleAdapter: () => OpenAICompatibleAdapter,
   OpenAIProviderAdapter: () => OpenAIProviderAdapter,
+  OpenRouterProviderAdapter: () => OpenRouterProviderAdapter,
   ProviderID: () => ProviderID,
   ProviderRouter: () => ProviderRouter,
   SqliteAdapter: () => SqliteAdapter,
@@ -35,13 +39,29 @@ __export(index_exports, {
   StreamInterruptedError: () => StreamInterruptedError,
   builtInProviders: () => builtInProviders,
   classifyError: () => classifyError,
+  classifyGeminiError: () => classifyGeminiError,
+  classifyOpenAIError: () => classifyOpenAIError,
+  clearRegisteredProviders: () => clearRegisteredProviders,
   defaultProviderPriority: () => defaultProviderPriority,
   getBuiltInModel: () => getBuiltInModel,
   getBuiltInProvider: () => getBuiltInProvider,
+  getModel: () => getModel,
+  getProvider: () => getProvider,
+  getProviderClassifier: () => getProviderClassifier,
+  listRegisteredProviders: () => listRegisteredProviders,
   planPreferredKeys: () => planPreferredKeys,
+  registerProvider: () => registerProvider,
+  registerProviderClassifier: () => registerProviderClassifier,
+  toGeminiTools: () => toGeminiTools,
+  toOpenAITools: () => toOpenAITools,
+  unregisterProvider: () => unregisterProvider,
+  unregisterProviderClassifier: () => unregisterProviderClassifier,
   withRetry: () => withRetry
 });
 module.exports = __toCommonJS(index_exports);
+
+// src/version.ts
+var AI_CORE_VERSION = "3.0.0";
 
 // src/key-pool/types.ts
 var NoAvailableKeyError = class extends Error {
@@ -455,14 +475,17 @@ function rowToApiKey(row) {
 }
 
 // src/retry/classify-error.ts
-function classifyError(err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  const lower = msg.toLowerCase();
+function shapeError(err) {
+  const message = err instanceof Error ? err.message : String(err);
   const status = err?.["status"] ?? err?.["httpStatusCode"] ?? 0;
+  return { message, lower: message.toLowerCase(), status };
+}
+function classifyGeminiError(err) {
+  const { lower, status } = shapeError(err);
   if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
     return "fatal";
   }
-  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("rateLimitExceeded")) {
+  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
     if (lower.includes("quota") || lower.includes("resource_exhausted")) {
       return "quota";
     }
@@ -472,6 +495,37 @@ function classifyError(err) {
     return "network";
   }
   return "unknown";
+}
+function classifyOpenAIError(err) {
+  const { lower, status } = shapeError(err);
+  if (status === 401 || status === 400 || status === 403 || lower.includes("invalid_api_key") || lower.includes("invalid api key") || lower.includes("incorrect api key") || lower.includes("account_deactivated") || lower.includes("permission_denied")) {
+    return "fatal";
+  }
+  if (status === 429 || lower.includes("insufficient_quota") || lower.includes("billing_hard_limit") || lower.includes("quota") || lower.includes("rate_limit_exceeded") || lower.includes("rate limit") || lower.includes("tokens_per_min")) {
+    if (lower.includes("insufficient_quota") || lower.includes("quota") || lower.includes("billing_hard_limit")) {
+      return "quota";
+    }
+    return "rate-limit";
+  }
+  if (status >= 500 || lower.includes("econnrefused") || lower.includes("etimedout") || lower.includes("fetch failed") || lower.includes("network") || lower.includes("server_error") || lower.includes("service_unavailable") || lower.includes("internal server")) {
+    return "network";
+  }
+  return "unknown";
+}
+var classifyError = classifyGeminiError;
+var providerClassifiers = /* @__PURE__ */ new Map([
+  ["gemini", classifyGeminiError],
+  ["openai", classifyOpenAIError],
+  ["openrouter", classifyOpenAIError]
+]);
+function registerProviderClassifier(providerID, classifier) {
+  providerClassifiers.set(providerID, classifier);
+}
+function unregisterProviderClassifier(providerID) {
+  return providerClassifiers.delete(providerID);
+}
+function getProviderClassifier(providerID) {
+  return providerClassifiers.get(providerID) ?? classifyError;
 }
 
 // src/retry/types.ts
@@ -554,6 +608,49 @@ async function withRetry(fn, initialKey, options = {}) {
 // src/client/gemini-client.ts
 var import_node_fs = require("fs");
 var import_generative_ai = require("@google/generative-ai");
+
+// src/client/tool-conversion.ts
+function toGeminiTools(tools) {
+  if (!tools || tools.length === 0) return void 0;
+  const functionDeclarations = [];
+  const passThrough = [];
+  for (const tool of tools) {
+    if (tool.type === "function") {
+      functionDeclarations.push({
+        name: tool.name,
+        ...tool.description !== void 0 && { description: tool.description },
+        ...tool.parameters !== void 0 && { parameters: tool.parameters }
+      });
+    } else if (tool.type === "provider-native" && tool.provider === "gemini") {
+      passThrough.push(tool.config);
+    }
+  }
+  const result = [];
+  if (functionDeclarations.length > 0) {
+    result.push({ functionDeclarations });
+  }
+  result.push(...passThrough);
+  return result.length > 0 ? result : void 0;
+}
+function toOpenAITools(tools, nativeToolProvider = "openai") {
+  if (!tools || tools.length === 0) return void 0;
+  const result = [];
+  for (const tool of tools) {
+    if (tool.type === "function") {
+      result.push({
+        type: "function",
+        function: {
+          name: tool.name,
+          ...tool.description !== void 0 && { description: tool.description },
+          ...tool.parameters !== void 0 && { parameters: tool.parameters }
+        }
+      });
+    } else if (tool.type === "provider-native" && tool.provider === nativeToolProvider) {
+      result.push(tool.config);
+    }
+  }
+  return result.length > 0 ? result : void 0;
+}
 
 // src/client/types.ts
 var StreamInterruptedError = class extends Error {
@@ -653,12 +750,13 @@ var GeminiClient = class {
             heartbeatKey = apiKey;
           }
           const genai = new import_generative_ai.GoogleGenerativeAI(apiKey);
+          const geminiTools = toGeminiTools(params.tools);
           const model = genai.getGenerativeModel({
             model: params.model,
             ...params.systemInstruction && {
               systemInstruction: params.systemInstruction
             },
-            ...params.tools && { tools: params.tools },
+            ...geminiTools && { tools: geminiTools },
             ...params.maxOutputTokens && {
               generationConfig: { maxOutputTokens: params.maxOutputTokens }
             }
@@ -730,12 +828,13 @@ var GeminiClient = class {
     const heartbeat = this.startLeaseHeartbeat(key);
     try {
       const genai = new import_generative_ai.GoogleGenerativeAI(key);
+      const geminiTools = toGeminiTools(params.tools);
       const model = genai.getGenerativeModel({
         model: params.model,
         ...params.systemInstruction && {
           systemInstruction: params.systemInstruction
         },
-        ...params.tools && { tools: params.tools }
+        ...geminiTools && { tools: geminiTools }
       });
       const content = params.images?.length ? buildParts(params.prompt, params.images) : params.prompt;
       const result = await model.generateContentStream(content);
@@ -762,6 +861,288 @@ var GeminiClient = class {
       await this.pool.release(key, failed).catch(() => {
       });
     }
+  }
+};
+
+// src/provider/schema.ts
+var ProviderID = {
+  Gemini: "gemini",
+  OpenAI: "openai",
+  OpenRouter: "openrouter"
+};
+
+// src/provider/models.ts
+var geminiModels = [
+  {
+    id: "gemini-2.5-flash",
+    provider: ProviderID.Gemini,
+    name: "Gemini 2.5 Flash",
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: false
+    },
+    contextWindow: 1e6,
+    outputLimit: 65536,
+    costTier: "low"
+  }
+];
+var openAIModels = [
+  {
+    id: "gpt-4.1-mini",
+    provider: ProviderID.OpenAI,
+    name: "GPT-4.1 mini",
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: false,
+      multimodalInput: false,
+      multimodalOutput: false
+    },
+    contextWindow: 1e6,
+    outputLimit: 32768,
+    costTier: "medium"
+  }
+];
+var openRouterModels = [
+  {
+    id: "openrouter/auto",
+    provider: ProviderID.OpenRouter,
+    name: "OpenRouter Auto",
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: false,
+      multimodalInput: false,
+      multimodalOutput: false
+    },
+    contextWindow: 128e3,
+    outputLimit: 32768,
+    costTier: "medium"
+  }
+];
+var builtInProviders = [
+  {
+    id: ProviderID.OpenAI,
+    name: "OpenAI",
+    authTypes: ["api"],
+    models: openAIModels
+  },
+  {
+    id: ProviderID.Gemini,
+    name: "Gemini",
+    authTypes: ["pool"],
+    models: geminiModels
+  },
+  {
+    id: ProviderID.OpenRouter,
+    name: "OpenRouter",
+    authTypes: ["api"],
+    models: openRouterModels
+  }
+];
+var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
+function getBuiltInProvider(providerID) {
+  return builtInProviders.find((provider) => provider.id === providerID);
+}
+function getBuiltInModel(modelID) {
+  for (const provider of builtInProviders) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+var customProviders = /* @__PURE__ */ new Map();
+function registerProvider(definition) {
+  if (getBuiltInProvider(definition.id)) {
+    throw new Error(
+      `Cannot re-register built-in provider id "${definition.id}". Use a distinct id for custom providers.`
+    );
+  }
+  customProviders.set(definition.id, definition);
+}
+function unregisterProvider(providerID) {
+  return customProviders.delete(providerID);
+}
+function clearRegisteredProviders() {
+  customProviders.clear();
+}
+function getProvider(providerID) {
+  return getBuiltInProvider(providerID) ?? customProviders.get(providerID);
+}
+function getModel(modelID) {
+  const builtIn = getBuiltInModel(modelID);
+  if (builtIn) return builtIn;
+  for (const provider of customProviders.values()) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+function listRegisteredProviders() {
+  return [...builtInProviders, ...customProviders.values()];
+}
+
+// src/provider/router.ts
+function credentialRef(adapter) {
+  const label = adapter.credential.credentialLabel;
+  if (label && label.trim() !== "") return label;
+  if (adapter.credential.type === "api") {
+    const suffix = adapter.credential.apiKey.slice(-4);
+    return `api:${suffix}`;
+  }
+  if (adapter.credential.type === "oauth") {
+    return "oauth";
+  }
+  return "pool";
+}
+function matchesCapabilities(model, required) {
+  if (!required) return true;
+  return Object.entries(required).every(([key, value]) => {
+    if (typeof value !== "boolean") return true;
+    return model.capabilities[key] === value;
+  });
+}
+var ProviderRouter = class {
+  constructor(adapters) {
+    this.adapters = adapters;
+  }
+  adapters;
+  select(policy = {}) {
+    return this.selectAdapter(policy).selection;
+  }
+  /**
+   * Select an adapter and execute generateContent against it.
+   *
+   * If the caller did not set `policy.preferredModel`, `params.model` is used
+   * as the model preference so the routing target matches the explicit request.
+   *
+   * No silent provider/model fallback: when the resolved selection picks a
+   * different model than the caller asked for, the policy must have opted in
+   * via `allowCrossProviderFallback` / `allowCrossModelFallback`.
+   */
+  async execute(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const response = await adapter.generateContent({ ...params, model: selection.model });
+    return { selection, response };
+  }
+  /**
+   * Mirror of execute() for streaming. Selection runs eagerly so the caller
+   * can inspect which provider/model resolved before iterating the stream.
+   */
+  executeStream(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { streaming: true, ...policy.requiredCapabilities ?? {} }
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const stream = adapter.streamContent({ ...params, model: selection.model });
+    return { selection, stream };
+  }
+  selectAdapter(policy) {
+    const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
+    const orderedProviders = [
+      ...preferredProviders,
+      ...(policy.allowCrossProviderFallback ? policy.fallbackProviders : []) ?? []
+    ];
+    const seen = /* @__PURE__ */ new Set();
+    const uniqueProviders = orderedProviders.filter((providerID) => {
+      if (seen.has(providerID)) return false;
+      seen.add(providerID);
+      return true;
+    });
+    for (const providerID of uniqueProviders) {
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      if (providerAdapters.length === 0) continue;
+      const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
+      for (const adapter of adaptersToTry) {
+        if (policy.preferredModel) {
+          const model = adapter.getModel(policy.preferredModel);
+          if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
+            return {
+              adapter,
+              selection: {
+                provider: providerID,
+                model: model.id,
+                credentialType: adapter.credential.type,
+                credentialRef: credentialRef(adapter)
+              }
+            };
+          }
+          if (!policy.allowCrossModelFallback) {
+            continue;
+          }
+        }
+        const models = adapter.provider.models.filter(
+          (model) => adapter.supports(model.id) && matchesCapabilities(model, policy.requiredCapabilities)
+        );
+        if (models.length === 0) {
+          continue;
+        }
+        return {
+          adapter,
+          selection: {
+            provider: providerID,
+            model: models[0].id,
+            credentialType: adapter.credential.type,
+            credentialRef: credentialRef(adapter)
+          }
+        };
+      }
+    }
+    throw new Error("No provider/model combination matches the routing policy");
+  }
+};
+
+// src/client/multi-provider-client.ts
+var MultiProviderClient = class {
+  router;
+  defaultPolicy;
+  onSelect;
+  constructor(options) {
+    this.router = new ProviderRouter(options.adapters);
+    this.defaultPolicy = options.defaultPolicy ?? {};
+    this.onSelect = options.onSelect;
+  }
+  mergePolicy(policy) {
+    if (!policy) return this.defaultPolicy;
+    return { ...this.defaultPolicy, ...policy };
+  }
+  async generateContent(params, policy) {
+    const { selection, response } = await this.router.execute(
+      params,
+      this.mergePolicy(policy)
+    );
+    this.onSelect?.(selection, params);
+    return response;
+  }
+  async *streamContent(params, policy) {
+    const { selection, stream } = this.router.executeStream(
+      params,
+      this.mergePolicy(policy)
+    );
+    this.onSelect?.(selection, params);
+    yield* stream;
+  }
+  /**
+   * Escape hatch for callers that need the routing selection alongside the
+   * response (e.g. cost attribution, A/B telemetry).
+   */
+  generateWithSelection(params, policy) {
+    return this.router.execute(params, this.mergePolicy(policy));
+  }
+  streamWithSelection(params, policy) {
+    return this.router.executeStream(params, this.mergePolicy(policy));
+  }
+  getRouter() {
+    return this.router;
   }
 };
 
@@ -1284,147 +1665,6 @@ var StepRunner = class {
   }
 };
 
-// src/provider/schema.ts
-var ProviderID = {
-  Gemini: "gemini",
-  OpenAI: "openai"
-};
-
-// src/provider/models.ts
-var geminiModels = [
-  {
-    id: "gemini-2.5-flash",
-    provider: ProviderID.Gemini,
-    name: "Gemini 2.5 Flash",
-    capabilities: {
-      streaming: true,
-      tools: true,
-      reasoning: true,
-      multimodalInput: true,
-      multimodalOutput: false
-    },
-    contextWindow: 1e6,
-    outputLimit: 65536,
-    costTier: "low"
-  }
-];
-var openAIModels = [
-  {
-    id: "gpt-4.1-mini",
-    provider: ProviderID.OpenAI,
-    name: "GPT-4.1 mini",
-    capabilities: {
-      streaming: false,
-      tools: false,
-      reasoning: false,
-      multimodalInput: false,
-      multimodalOutput: false
-    },
-    contextWindow: 1e6,
-    outputLimit: 32768,
-    costTier: "medium"
-  }
-];
-var builtInProviders = [
-  {
-    id: ProviderID.OpenAI,
-    name: "OpenAI",
-    authTypes: ["api"],
-    models: openAIModels
-  },
-  {
-    id: ProviderID.Gemini,
-    name: "Gemini",
-    authTypes: ["pool"],
-    models: geminiModels
-  }
-];
-var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
-function getBuiltInProvider(providerID) {
-  return builtInProviders.find((provider) => provider.id === providerID);
-}
-function getBuiltInModel(modelID) {
-  for (const provider of builtInProviders) {
-    const model = provider.models.find((item) => item.id === modelID);
-    if (model) return model;
-  }
-  return void 0;
-}
-
-// src/provider/router.ts
-function credentialRef(adapter) {
-  const label = adapter.credential.credentialLabel;
-  if (label && label.trim() !== "") return label;
-  if (adapter.credential.type === "api") {
-    const suffix = adapter.credential.apiKey.slice(-4);
-    return `api:${suffix}`;
-  }
-  if (adapter.credential.type === "oauth") {
-    return "oauth";
-  }
-  return "pool";
-}
-function matchesCapabilities(model, required) {
-  if (!required) return true;
-  return Object.entries(required).every(([key, value]) => {
-    if (typeof value !== "boolean") return true;
-    return model.capabilities[key] === value;
-  });
-}
-var ProviderRouter = class {
-  constructor(adapters) {
-    this.adapters = adapters;
-  }
-  adapters;
-  select(policy = {}) {
-    const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
-    const orderedProviders = [
-      ...preferredProviders,
-      ...(policy.allowCrossProviderFallback ? policy.fallbackProviders : []) ?? []
-    ];
-    const seen = /* @__PURE__ */ new Set();
-    const uniqueProviders = orderedProviders.filter((providerID) => {
-      if (seen.has(providerID)) return false;
-      seen.add(providerID);
-      return true;
-    });
-    for (const providerID of uniqueProviders) {
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
-      if (providerAdapters.length === 0) continue;
-      const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
-      for (const adapter of adaptersToTry) {
-        if (policy.preferredModel) {
-          const model = adapter.getModel(policy.preferredModel);
-          if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
-            return {
-              provider: providerID,
-              model: model.id,
-              credentialType: adapter.credential.type,
-              credentialRef: credentialRef(adapter)
-            };
-          }
-          if (!policy.allowCrossModelFallback) {
-            continue;
-          }
-        }
-        const models = adapter.provider.models.filter(
-          (model) => adapter.supports(model.id) && matchesCapabilities(model, policy.requiredCapabilities)
-        );
-        if (models.length === 0) {
-          continue;
-        }
-        return {
-          provider: providerID,
-          model: models[0].id,
-          credentialType: adapter.credential.type,
-          credentialRef: credentialRef(adapter)
-        };
-      }
-    }
-    throw new Error("No provider/model combination matches the routing policy");
-  }
-};
-
 // src/provider/adapters/gemini.ts
 var GeminiProviderAdapter = class {
   provider = getBuiltInProvider("gemini");
@@ -1445,9 +1685,12 @@ var GeminiProviderAdapter = class {
   async generateContent(params) {
     return this.client.generateContent(params);
   }
+  streamContent(params) {
+    return this.client.streamContent(params);
+  }
 };
 
-// src/provider/adapters/openai.ts
+// src/provider/adapters/openai-compatible.ts
 function toOpenAIMessages(params) {
   const messages = [];
   if (params.systemInstruction) {
@@ -1462,8 +1705,7 @@ function toOpenAIMessages(params) {
   messages.push({ role: "user", content: params.prompt });
   return messages;
 }
-var OpenAIProviderAdapter = class {
-  provider = getBuiltInProvider("openai");
+var OpenAICompatibleAdapter = class {
   credential;
   constructor(credential) {
     this.credential = credential;
@@ -1472,35 +1714,45 @@ var OpenAIProviderAdapter = class {
     return this.provider.models.some((model) => model.id === modelID);
   }
   getModel(modelID) {
-    const model = getBuiltInModel(modelID);
-    if (!model || model.provider !== this.provider.id) return void 0;
+    const model = this.provider.models.find((item) => item.id === modelID);
     return model;
+  }
+  buildHeaders() {
+    return {
+      Authorization: `Bearer ${this.credential.apiKey}`,
+      "Content-Type": "application/json"
+    };
+  }
+  get baseURL() {
+    return this.credential.baseURL ?? this.defaultBaseURL;
+  }
+  buildRequestBody(params, stream) {
+    const model = params.model || this.provider.models[0].id;
+    const tools = toOpenAITools(params.tools, this.nativeToolProvider);
+    return {
+      model,
+      messages: toOpenAIMessages(params),
+      ...tools && { tools },
+      ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens },
+      ...stream && { stream: true }
+    };
   }
   async generateContent(params) {
     if (params.images?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
+      throw new Error(
+        `${this.provider.name} adapter does not support multimodal input yet`
+      );
     }
-    if (params.tools?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support tools yet");
-    }
-    const model = params.model || this.provider.models[0].id;
-    const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
-    const response = await fetch(`${baseURL}/chat/completions`, {
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.credential.apiKey}`,
-        "Content-Type": "application/json",
-        ...this.credential.organization && { "OpenAI-Organization": this.credential.organization }
-      },
-      body: JSON.stringify({
-        model,
-        messages: toOpenAIMessages(params),
-        ...params.maxOutputTokens && { max_tokens: params.maxOutputTokens }
-      })
+      headers: this.buildHeaders(),
+      body: JSON.stringify(this.buildRequestBody(params, false))
     });
     if (!response.ok) {
       const text2 = await response.text();
-      const error = new Error(text2 || `OpenAI request failed with status ${response.status}`);
+      const error = new Error(
+        text2 || `${this.provider.name} request failed with status ${response.status}`
+      );
       error.status = response.status;
       throw error;
     }
@@ -1516,17 +1768,120 @@ var OpenAIProviderAdapter = class {
       } : null
     };
   }
+  async *streamContent(params) {
+    if (params.images?.length) {
+      throw new Error(
+        `${this.provider.name} adapter does not support multimodal input yet`
+      );
+    }
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: { ...this.buildHeaders(), Accept: "text/event-stream" },
+      body: JSON.stringify(this.buildRequestBody(params, true))
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(
+        text || `${this.provider.name} stream request failed with status ${response.status}`
+      );
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.body) {
+      throw new Error(`${this.provider.name} stream response has no body`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    let chunksReceived = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        let newlineIndex;
+        while ((newlineIndex = buffered.indexOf("\n")) !== -1) {
+          const rawLine = buffered.slice(0, newlineIndex).replace(/\r$/, "");
+          buffered = buffered.slice(newlineIndex + 1);
+          if (!rawLine.startsWith("data:")) continue;
+          const payload = rawLine.slice(5).trim();
+          if (payload === "" || payload === "[DONE]") continue;
+          let parsed;
+          try {
+            parsed = JSON.parse(payload);
+          } catch (err) {
+            throw new StreamInterruptedError(chunksReceived, err);
+          }
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            chunksReceived += 1;
+            yield delta;
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof StreamInterruptedError) throw err;
+      throw new StreamInterruptedError(chunksReceived, err);
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
+
+// src/provider/adapters/openai.ts
+var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
+  provider = getBuiltInProvider("openai");
+  defaultBaseURL = "https://api.openai.com/v1";
+  nativeToolProvider = "openai";
+  constructor(credential) {
+    super(credential);
+  }
+  buildHeaders() {
+    return {
+      ...super.buildHeaders(),
+      ...this.credential.organization && {
+        "OpenAI-Organization": this.credential.organization
+      }
+    };
+  }
+};
+
+// src/provider/adapters/openrouter.ts
+var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
+  provider;
+  defaultBaseURL = "https://openrouter.ai/api/v1";
+  nativeToolProvider = "openrouter";
+  referer;
+  appTitle;
+  constructor(credential, options = {}) {
+    super(credential);
+    const base = getBuiltInProvider("openrouter");
+    this.provider = options.additionalModels?.length ? { ...base, models: [...base.models, ...options.additionalModels] } : base;
+    this.referer = options.referer;
+    this.appTitle = options.appTitle;
+  }
+  buildHeaders() {
+    return {
+      ...super.buildHeaders(),
+      ...this.referer && { "HTTP-Referer": this.referer },
+      ...this.appTitle && { "X-Title": this.appTitle }
+    };
+  }
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  AI_CORE_VERSION,
   AgentRuntime,
   GeminiClient,
   GeminiProviderAdapter,
   KeyPool,
   LeaseHeartbeat,
   MaxRetriesExceededError,
+  MultiProviderClient,
   NoAvailableKeyError,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,
   SqliteAdapter,
@@ -1534,10 +1889,23 @@ var OpenAIProviderAdapter = class {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
+  getModel,
+  getProvider,
+  getProviderClassifier,
+  listRegisteredProviders,
   planPreferredKeys,
+  registerProvider,
+  registerProviderClassifier,
+  toGeminiTools,
+  toOpenAITools,
+  unregisterProvider,
+  unregisterProviderClassifier,
   withRetry
 });
 //# sourceMappingURL=index.cjs.map

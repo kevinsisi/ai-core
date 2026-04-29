@@ -1,3 +1,4 @@
+import type { GenerateParams, GenerateResponse } from "../client/types.js";
 import { defaultProviderPriority, getBuiltInModel } from "./models.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 
@@ -29,10 +30,65 @@ function matchesCapabilities(
   });
 }
 
+export interface RoutedExecution {
+  selection: RoutedProviderSelection;
+  response: GenerateResponse;
+}
+
+export interface RoutedStream {
+  selection: RoutedProviderSelection;
+  stream: AsyncGenerator<string, void, unknown>;
+}
+
 export class ProviderRouter {
   constructor(private readonly adapters: ProviderAdapter[]) {}
 
   select(policy: RoutePolicy = {}): RoutedProviderSelection {
+    return this.selectAdapter(policy).selection;
+  }
+
+  /**
+   * Select an adapter and execute generateContent against it.
+   *
+   * If the caller did not set `policy.preferredModel`, `params.model` is used
+   * as the model preference so the routing target matches the explicit request.
+   *
+   * No silent provider/model fallback: when the resolved selection picks a
+   * different model than the caller asked for, the policy must have opted in
+   * via `allowCrossProviderFallback` / `allowCrossModelFallback`.
+   */
+  async execute(
+    params: GenerateParams,
+    policy: RoutePolicy = {}
+  ): Promise<RoutedExecution> {
+    const effectivePolicy: RoutePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const response = await adapter.generateContent({ ...params, model: selection.model });
+    return { selection, response };
+  }
+
+  /**
+   * Mirror of execute() for streaming. Selection runs eagerly so the caller
+   * can inspect which provider/model resolved before iterating the stream.
+   */
+  executeStream(params: GenerateParams, policy: RoutePolicy = {}): RoutedStream {
+    const effectivePolicy: RoutePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { streaming: true, ...(policy.requiredCapabilities ?? {}) },
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    const stream = adapter.streamContent({ ...params, model: selection.model });
+    return { selection, stream };
+  }
+
+  private selectAdapter(policy: RoutePolicy): {
+    adapter: ProviderAdapter;
+    selection: RoutedProviderSelection;
+  } {
     const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
@@ -59,10 +115,13 @@ export class ProviderRouter {
           const model = adapter.getModel(policy.preferredModel);
           if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
             return {
-              provider: providerID,
-              model: model.id,
-              credentialType: adapter.credential.type,
-              credentialRef: credentialRef(adapter),
+              adapter,
+              selection: {
+                provider: providerID,
+                model: model.id,
+                credentialType: adapter.credential.type,
+                credentialRef: credentialRef(adapter),
+              },
             };
           }
 
@@ -79,10 +138,13 @@ export class ProviderRouter {
         }
 
         return {
-          provider: providerID,
-          model: models[0].id,
-          credentialType: adapter.credential.type,
-          credentialRef: credentialRef(adapter),
+          adapter,
+          selection: {
+            provider: providerID,
+            model: models[0].id,
+            credentialType: adapter.credential.type,
+            credentialRef: credentialRef(adapter),
+          },
         };
       }
     }

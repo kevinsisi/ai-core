@@ -97,13 +97,13 @@ const { text } = await client.generateContent({
 
 | Export path | 匯出內容 |
 |---|---|
-| `@kevinsisi/ai-core` | KeyPool, StorageAdapter, withRetry, GeminiClient（全部） |
+| `@kevinsisi/ai-core` | AI_CORE_VERSION, KeyPool, StorageAdapter, withRetry, GeminiClient, MultiProviderClient, ProviderRouter（全部） |
 | `@kevinsisi/ai-core/key-pool` | KeyPool, SqliteAdapter, NoAvailableKeyError, ApiKey, StorageAdapter, KeyPoolOptions |
-| `@kevinsisi/ai-core/retry` | withRetry, classifyError, MaxRetriesExceededError, ErrorClass, RetryOptions |
-| `@kevinsisi/ai-core/client` | GeminiClient, StreamInterruptedError, ChatMessage, GenerateParams, GenerateResponse |
+| `@kevinsisi/ai-core/retry` | withRetry, classifyError, classifyGeminiError, classifyOpenAIError, getProviderClassifier, registerProviderClassifier, MaxRetriesExceededError, ErrorClass, RetryOptions, ProviderErrorClassifier |
+| `@kevinsisi/ai-core/client` | GeminiClient, MultiProviderClient, StreamInterruptedError, Tool, FunctionTool, ProviderNativeTool, toGeminiTools, toOpenAITools, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 | `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
-| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, ProviderRouter, pool-backed Gemini adapter, OpenAI adapter |
+| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, registerProvider/unregisterProvider/getProvider/getModel, ProviderRouter (with execute/executeStream), GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterProviderAdapter |
 
 ---
 

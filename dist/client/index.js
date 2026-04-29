@@ -1,12 +1,19 @@
-import "../chunk-33KXZGPC.js";
+import {
+  MultiProviderClient
+} from "../chunk-UQCO7H7A.js";
 import {
   GeminiClient,
-  StreamInterruptedError
-} from "../chunk-QZBKFRLG.js";
-import "../chunk-6YVUQYI5.js";
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools
+} from "../chunk-PWSNKNQE.js";
+import "../chunk-4UUUL6JJ.js";
 import "../chunk-NHGYIXGT.js";
 export {
   GeminiClient,
-  StreamInterruptedError
+  MultiProviderClient,
+  StreamInterruptedError,
+  toGeminiTools,
+  toOpenAITools
 };
 //# sourceMappingURL=index.js.map

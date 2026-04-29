@@ -1,108 +1,23 @@
-import type { GenerateParams, GenerateResponse } from "../../client/types.js";
 import type { ApiKeyCredential } from "../auth.js";
-import { getBuiltInModel, getBuiltInProvider } from "../models.js";
-import type { ProviderAdapter } from "../types.js";
+import { getBuiltInProvider } from "../models.js";
+import { OpenAICompatibleAdapter } from "./openai-compatible.js";
 
-interface OpenAIChatResponse {
-  choices?: Array<{
-    message?: {
-      content?: string | Array<{ type: string; text?: string }>;
-    };
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-}
-
-function toOpenAIMessages(params: GenerateParams) {
-  const messages: Array<Record<string, unknown>> = [];
-
-  if (params.systemInstruction) {
-    messages.push({ role: "system", content: params.systemInstruction });
-  }
-
-  for (const message of params.history ?? []) {
-    messages.push({
-      role: message.role === "model" ? "assistant" : message.role,
-      content: message.parts,
-    });
-  }
-
-  messages.push({ role: "user", content: params.prompt });
-  return messages;
-}
-
-export class OpenAIProviderAdapter implements ProviderAdapter {
+export class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
   readonly provider = getBuiltInProvider("openai")!;
 
-  readonly credential: ApiKeyCredential;
+  protected readonly defaultBaseURL = "https://api.openai.com/v1";
+  protected readonly nativeToolProvider = "openai";
 
   constructor(credential: ApiKeyCredential) {
-    this.credential = credential;
+    super(credential);
   }
 
-  supports(modelID: string): boolean {
-    return this.provider.models.some((model) => model.id === modelID);
-  }
-
-  getModel(modelID: string) {
-    const model = getBuiltInModel(modelID);
-    if (!model || model.provider !== this.provider.id) return undefined;
-    return model;
-  }
-
-  async generateContent(params: GenerateParams): Promise<GenerateResponse> {
-    if (params.images?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support multimodal input yet");
-    }
-
-    if (params.tools?.length) {
-      throw new Error("OpenAIProviderAdapter phase 1 does not support tools yet");
-    }
-
-    const model = params.model || this.provider.models[0].id;
-    const baseURL = this.credential.baseURL ?? "https://api.openai.com/v1";
-
-    const response = await fetch(`${baseURL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.credential.apiKey}`,
-        "Content-Type": "application/json",
-        ...(this.credential.organization && { "OpenAI-Organization": this.credential.organization }),
-      },
-      body: JSON.stringify({
-        model,
-        messages: toOpenAIMessages(params),
-        ...(params.maxOutputTokens && { max_tokens: params.maxOutputTokens }),
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      const error = new Error(text || `OpenAI request failed with status ${response.status}`) as Error & {
-        status?: number;
-      };
-      error.status = response.status;
-      throw error;
-    }
-
-    const json = (await response.json()) as OpenAIChatResponse;
-    const firstContent = json.choices?.[0]?.message?.content;
-    const text = Array.isArray(firstContent)
-      ? firstContent.map((item) => item.text || "").join("")
-      : (firstContent ?? "");
-
+  protected override buildHeaders(): Record<string, string> {
     return {
-      text,
-      usage: json.usage
-        ? {
-            promptTokens: json.usage.prompt_tokens ?? 0,
-            completionTokens: json.usage.completion_tokens ?? 0,
-            totalTokens: json.usage.total_tokens ?? 0,
-          }
-        : null,
+      ...super.buildHeaders(),
+      ...(this.credential.organization && {
+        "OpenAI-Organization": this.credential.organization,
+      }),
     };
   }
 }

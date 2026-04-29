@@ -3,14 +3,17 @@ import {
 } from "./chunk-NHGYIXGT.js";
 
 // src/retry/classify-error.ts
-function classifyError(err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  const lower = msg.toLowerCase();
+function shapeError(err) {
+  const message = err instanceof Error ? err.message : String(err);
   const status = err?.["status"] ?? err?.["httpStatusCode"] ?? 0;
+  return { message, lower: message.toLowerCase(), status };
+}
+function classifyGeminiError(err) {
+  const { lower, status } = shapeError(err);
   if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
     return "fatal";
   }
-  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("rateLimitExceeded")) {
+  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
     if (lower.includes("quota") || lower.includes("resource_exhausted")) {
       return "quota";
     }
@@ -20,6 +23,37 @@ function classifyError(err) {
     return "network";
   }
   return "unknown";
+}
+function classifyOpenAIError(err) {
+  const { lower, status } = shapeError(err);
+  if (status === 401 || status === 400 || status === 403 || lower.includes("invalid_api_key") || lower.includes("invalid api key") || lower.includes("incorrect api key") || lower.includes("account_deactivated") || lower.includes("permission_denied")) {
+    return "fatal";
+  }
+  if (status === 429 || lower.includes("insufficient_quota") || lower.includes("billing_hard_limit") || lower.includes("quota") || lower.includes("rate_limit_exceeded") || lower.includes("rate limit") || lower.includes("tokens_per_min")) {
+    if (lower.includes("insufficient_quota") || lower.includes("quota") || lower.includes("billing_hard_limit")) {
+      return "quota";
+    }
+    return "rate-limit";
+  }
+  if (status >= 500 || lower.includes("econnrefused") || lower.includes("etimedout") || lower.includes("fetch failed") || lower.includes("network") || lower.includes("server_error") || lower.includes("service_unavailable") || lower.includes("internal server")) {
+    return "network";
+  }
+  return "unknown";
+}
+var classifyError = classifyGeminiError;
+var providerClassifiers = /* @__PURE__ */ new Map([
+  ["gemini", classifyGeminiError],
+  ["openai", classifyOpenAIError],
+  ["openrouter", classifyOpenAIError]
+]);
+function registerProviderClassifier(providerID, classifier) {
+  providerClassifiers.set(providerID, classifier);
+}
+function unregisterProviderClassifier(providerID) {
+  return providerClassifiers.delete(providerID);
+}
+function getProviderClassifier(providerID) {
+  return providerClassifiers.get(providerID) ?? classifyError;
 }
 
 // src/retry/types.ts
@@ -100,8 +134,13 @@ async function withRetry(fn, initialKey, options = {}) {
 }
 
 export {
+  classifyGeminiError,
+  classifyOpenAIError,
   classifyError,
+  registerProviderClassifier,
+  unregisterProviderClassifier,
+  getProviderClassifier,
   MaxRetriesExceededError,
   withRetry
 };
-//# sourceMappingURL=chunk-6YVUQYI5.js.map
+//# sourceMappingURL=chunk-4UUUL6JJ.js.map

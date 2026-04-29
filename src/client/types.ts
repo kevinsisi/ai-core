@@ -27,20 +27,52 @@ export interface FileImagePart {
 
 export type ImagePart = InlineImagePart | FileImagePart;
 
+// ── Tool types ─────────────────────────────────────────────────────────
+
+/**
+ * Provider-agnostic function tool. The `parameters` object is a JSON Schema
+ * describing the tool's arguments, in the same shape OpenAI / Anthropic /
+ * Gemini all accept under their respective wrappers.
+ */
+export interface FunctionTool {
+  type: "function";
+  name: string;
+  description?: string;
+  /** JSON Schema for the function arguments. */
+  parameters?: Record<string, unknown>;
+}
+
+/**
+ * Escape hatch for provider built-ins that have no cross-provider equivalent
+ * (e.g. Gemini `googleSearch` grounding, OpenAI `web_search_preview`,
+ * code execution sandboxes). The `config` payload is passed through to the
+ * upstream provider verbatim — adapters from other providers ignore it.
+ */
+export interface ProviderNativeTool {
+  type: "provider-native";
+  /** Target provider id this tool only applies to (e.g. "gemini", "openai"). */
+  provider: string;
+  /** Raw provider-specific payload passed through verbatim. */
+  config: Record<string, unknown>;
+}
+
+export type Tool = FunctionTool | ProviderNativeTool;
+
 // ── Generate types ─────────────────────────────────────────────────────
 
 export interface GenerateParams {
-  /** Gemini model name, e.g. "gemini-2.5-flash" */
+  /** Model id, e.g. "gemini-2.5-flash", "gpt-4.1-mini". */
   model: string;
   systemInstruction?: string;
   prompt: string;
   /** Optional images to send alongside the prompt (multimodal). */
   images?: ImagePart[];
   /**
-   * Optional Gemini tool declarations (e.g., Google Search grounding).
-   * Passed directly to `getGenerativeModel()`.
+   * Provider-agnostic tool declarations. Use FunctionTool for cross-provider
+   * function calling; use ProviderNativeTool to opt into a provider-specific
+   * built-in (the tool is silently ignored by adapters of other providers).
    */
-  tools?: import("@google/generative-ai").Tool[];
+  tools?: Tool[];
   history?: ChatMessage[];
   maxOutputTokens?: number;
 }

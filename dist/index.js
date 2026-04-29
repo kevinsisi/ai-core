@@ -1,48 +1,72 @@
 import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
-import "./chunk-33KXZGPC.js";
 import {
-  GeminiProviderAdapter,
-  OpenAIProviderAdapter,
-  ProviderID,
-  ProviderRouter,
-  builtInProviders,
-  defaultProviderPriority,
-  getBuiltInModel,
-  getBuiltInProvider
-} from "./chunk-ZAHFPLCJ.js";
-import {
-  GeminiClient,
-  StreamInterruptedError
-} from "./chunk-QZBKFRLG.js";
+  MultiProviderClient
+} from "./chunk-UQCO7H7A.js";
 import {
   LeaseHeartbeat,
   StepRunner,
   planPreferredKeys
-} from "./chunk-T7BI7RYW.js";
+} from "./chunk-BOMBZZRG.js";
 import {
   KeyPool,
   SqliteAdapter
-} from "./chunk-TQP53VQG.js";
+} from "./chunk-KUFFHZDJ.js";
 import "./chunk-U42SY5KL.js";
+import {
+  GeminiProviderAdapter,
+  OpenAICompatibleAdapter,
+  OpenAIProviderAdapter,
+  OpenRouterProviderAdapter
+} from "./chunk-QMXQZLSJ.js";
+import {
+  GeminiClient,
+  ProviderID,
+  ProviderRouter,
+  StreamInterruptedError,
+  builtInProviders,
+  clearRegisteredProviders,
+  defaultProviderPriority,
+  getBuiltInModel,
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  listRegisteredProviders,
+  registerProvider,
+  toGeminiTools,
+  toOpenAITools,
+  unregisterProvider
+} from "./chunk-PWSNKNQE.js";
 import {
   MaxRetriesExceededError,
   classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  getProviderClassifier,
+  registerProviderClassifier,
+  unregisterProviderClassifier,
   withRetry
-} from "./chunk-6YVUQYI5.js";
+} from "./chunk-4UUUL6JJ.js";
 import {
   NoAvailableKeyError
 } from "./chunk-NHGYIXGT.js";
+
+// src/version.ts
+var AI_CORE_VERSION = "3.0.0";
 export {
+  AI_CORE_VERSION,
   AgentRuntime,
   GeminiClient,
   GeminiProviderAdapter,
   KeyPool,
   LeaseHeartbeat,
   MaxRetriesExceededError,
+  MultiProviderClient,
   NoAvailableKeyError,
+  OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,
   SqliteAdapter,
@@ -50,10 +74,23 @@ export {
   StreamInterruptedError,
   builtInProviders,
   classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  clearRegisteredProviders,
   defaultProviderPriority,
   getBuiltInModel,
   getBuiltInProvider,
+  getModel,
+  getProvider,
+  getProviderClassifier,
+  listRegisteredProviders,
   planPreferredKeys,
+  registerProvider,
+  registerProviderClassifier,
+  toGeminiTools,
+  toOpenAITools,
+  unregisterProvider,
+  unregisterProviderClassifier,
   withRetry
 };
 //# sourceMappingURL=index.js.map

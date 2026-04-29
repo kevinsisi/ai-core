@@ -1,145 +1,6 @@
-"use strict";
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-// src/client/index.ts
-var client_exports = {};
-__export(client_exports, {
-  GeminiClient: () => GeminiClient,
-  MultiProviderClient: () => MultiProviderClient,
-  StreamInterruptedError: () => StreamInterruptedError,
-  toGeminiTools: () => toGeminiTools,
-  toOpenAITools: () => toOpenAITools
-});
-module.exports = __toCommonJS(client_exports);
-
-// src/client/gemini-client.ts
-var import_node_fs = require("fs");
-var import_generative_ai = require("@google/generative-ai");
-
-// src/retry/classify-error.ts
-function shapeError(err) {
-  const message = err instanceof Error ? err.message : String(err);
-  const status = err?.["status"] ?? err?.["httpStatusCode"] ?? 0;
-  return { message, lower: message.toLowerCase(), status };
-}
-function classifyGeminiError(err) {
-  const { lower, status } = shapeError(err);
-  if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
-    return "fatal";
-  }
-  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
-    if (lower.includes("quota") || lower.includes("resource_exhausted")) {
-      return "quota";
-    }
-    return "rate-limit";
-  }
-  if (status >= 500 || lower.includes("econnrefused") || lower.includes("etimedout") || lower.includes("fetch failed") || lower.includes("network") || lower.includes("503") || lower.includes("500") || lower.includes("unavailable") || lower.includes("internal server")) {
-    return "network";
-  }
-  return "unknown";
-}
-var classifyError = classifyGeminiError;
-
-// src/retry/types.ts
-var MaxRetriesExceededError = class extends Error {
-  attempts;
-  lastError;
-  constructor(attempts, lastError) {
-    const inner = lastError instanceof Error ? lastError.message : String(lastError);
-    super(`Max retries exceeded after ${attempts} attempt(s): ${inner}`);
-    this.name = "MaxRetriesExceededError";
-    this.attempts = attempts;
-    this.lastError = lastError;
-  }
-};
-
-// src/key-pool/types.ts
-var NoAvailableKeyError = class extends Error {
-  constructor(message = "No available API keys in pool") {
-    super(message);
-    this.name = "NoAvailableKeyError";
-  }
-};
-
-// src/retry/with-retry.ts
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-async function withRetry(fn, initialKey, options = {}) {
-  const maxRetries = options.maxRetries ?? 3;
-  const classify = options.classifyError ?? classifyError;
-  const initialBackoff = options.initialBackoffMs ?? 1e3;
-  const maxBackoff = options.maxBackoffMs ?? 3e4;
-  let currentKey = initialKey;
-  let lastError;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn(currentKey);
-    } catch (err) {
-      lastError = err;
-      const errorClass = classify(err);
-      options.onRetry?.({
-        attempt: attempt + 1,
-        maxRetries,
-        errorClass,
-        error: err
-      });
-      if (attempt >= maxRetries) break;
-      switch (errorClass) {
-        case "quota":
-        case "rate-limit": {
-          if (!options.rotateKey) {
-            throw err;
-          }
-          try {
-            currentKey = await options.rotateKey();
-            options.onRetry?.({
-              attempt: attempt + 1,
-              maxRetries,
-              errorClass,
-              error: err,
-              newKey: currentKey
-            });
-          } catch (rotateErr) {
-            if (rotateErr instanceof NoAvailableKeyError) {
-              throw rotateErr;
-            }
-            throw rotateErr;
-          }
-          break;
-        }
-        case "network": {
-          const backoff = Math.min(
-            initialBackoff * Math.pow(2, attempt),
-            maxBackoff
-          );
-          await sleep(backoff);
-          break;
-        }
-        case "fatal":
-        case "unknown":
-          throw err;
-      }
-    }
-  }
-  throw new MaxRetriesExceededError(maxRetries + 1, lastError);
-}
+import {
+  withRetry
+} from "./chunk-4UUUL6JJ.js";
 
 // src/client/tool-conversion.ts
 function toGeminiTools(tools) {
@@ -198,6 +59,8 @@ var StreamInterruptedError = class extends Error {
 };
 
 // src/client/gemini-client.ts
+import { readFileSync } from "fs";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 function extractUsage(response) {
   const meta = response.usageMetadata;
   if (!meta) return null;
@@ -221,7 +84,7 @@ function buildParts(prompt, images) {
         inlineData: { mimeType: image.mimeType, data: image.data }
       });
     } else {
-      const data = (0, import_node_fs.readFileSync)(image.filePath).toString("base64");
+      const data = readFileSync(image.filePath).toString("base64");
       parts.push({
         inlineData: { mimeType: image.mimeType, data }
       });
@@ -281,7 +144,7 @@ var GeminiClient = class {
             heartbeat = this.startLeaseHeartbeat(apiKey);
             heartbeatKey = apiKey;
           }
-          const genai = new import_generative_ai.GoogleGenerativeAI(apiKey);
+          const genai = new GoogleGenerativeAI(apiKey);
           const geminiTools = toGeminiTools(params.tools);
           const model = genai.getGenerativeModel({
             model: params.model,
@@ -359,7 +222,7 @@ var GeminiClient = class {
     let failed = false;
     const heartbeat = this.startLeaseHeartbeat(key);
     try {
-      const genai = new import_generative_ai.GoogleGenerativeAI(key);
+      const genai = new GoogleGenerativeAI(key);
       const geminiTools = toGeminiTools(params.tools);
       const model = genai.getGenerativeModel({
         model: params.model,
@@ -476,6 +339,46 @@ var builtInProviders = [
   }
 ];
 var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
+function getBuiltInProvider(providerID) {
+  return builtInProviders.find((provider) => provider.id === providerID);
+}
+function getBuiltInModel(modelID) {
+  for (const provider of builtInProviders) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+var customProviders = /* @__PURE__ */ new Map();
+function registerProvider(definition) {
+  if (getBuiltInProvider(definition.id)) {
+    throw new Error(
+      `Cannot re-register built-in provider id "${definition.id}". Use a distinct id for custom providers.`
+    );
+  }
+  customProviders.set(definition.id, definition);
+}
+function unregisterProvider(providerID) {
+  return customProviders.delete(providerID);
+}
+function clearRegisteredProviders() {
+  customProviders.clear();
+}
+function getProvider(providerID) {
+  return getBuiltInProvider(providerID) ?? customProviders.get(providerID);
+}
+function getModel(modelID) {
+  const builtIn = getBuiltInModel(modelID);
+  if (builtIn) return builtIn;
+  for (const provider of customProviders.values()) {
+    const model = provider.models.find((item) => item.id === modelID);
+    if (model) return model;
+  }
+  return void 0;
+}
+function listRegisteredProviders() {
+  return [...builtInProviders, ...customProviders.values()];
+}
 
 // src/provider/router.ts
 function credentialRef(adapter) {
@@ -593,56 +496,22 @@ var ProviderRouter = class {
   }
 };
 
-// src/client/multi-provider-client.ts
-var MultiProviderClient = class {
-  router;
-  defaultPolicy;
-  onSelect;
-  constructor(options) {
-    this.router = new ProviderRouter(options.adapters);
-    this.defaultPolicy = options.defaultPolicy ?? {};
-    this.onSelect = options.onSelect;
-  }
-  mergePolicy(policy) {
-    if (!policy) return this.defaultPolicy;
-    return { ...this.defaultPolicy, ...policy };
-  }
-  async generateContent(params, policy) {
-    const { selection, response } = await this.router.execute(
-      params,
-      this.mergePolicy(policy)
-    );
-    this.onSelect?.(selection, params);
-    return response;
-  }
-  async *streamContent(params, policy) {
-    const { selection, stream } = this.router.executeStream(
-      params,
-      this.mergePolicy(policy)
-    );
-    this.onSelect?.(selection, params);
-    yield* stream;
-  }
-  /**
-   * Escape hatch for callers that need the routing selection alongside the
-   * response (e.g. cost attribution, A/B telemetry).
-   */
-  generateWithSelection(params, policy) {
-    return this.router.execute(params, this.mergePolicy(policy));
-  }
-  streamWithSelection(params, policy) {
-    return this.router.executeStream(params, this.mergePolicy(policy));
-  }
-  getRouter() {
-    return this.router;
-  }
-};
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
-  GeminiClient,
-  MultiProviderClient,
-  StreamInterruptedError,
+export {
   toGeminiTools,
-  toOpenAITools
-});
-//# sourceMappingURL=index.cjs.map
+  toOpenAITools,
+  StreamInterruptedError,
+  GeminiClient,
+  ProviderID,
+  builtInProviders,
+  defaultProviderPriority,
+  getBuiltInProvider,
+  getBuiltInModel,
+  registerProvider,
+  unregisterProvider,
+  clearRegisteredProviders,
+  getProvider,
+  getModel,
+  listRegisteredProviders,
+  ProviderRouter
+};
+//# sourceMappingURL=chunk-PWSNKNQE.js.map

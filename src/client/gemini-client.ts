@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Part } from "@google/generative-ai";
 import type { KeyPool } from "../key-pool/key-pool.js";
 import { withRetry } from "../retry/with-retry.js";
+import { toGeminiTools } from "./tool-conversion.js";
 import type {
   GenerateParams,
   GenerateResponse,
@@ -138,12 +139,13 @@ export class GeminiClient {
             heartbeatKey = apiKey;
           }
           const genai = new GoogleGenerativeAI(apiKey);
+          const geminiTools = toGeminiTools(params.tools);
           const model = genai.getGenerativeModel({
             model: params.model,
             ...(params.systemInstruction && {
               systemInstruction: params.systemInstruction,
             }),
-            ...(params.tools && { tools: params.tools }),
+            ...(geminiTools && { tools: geminiTools }),
             ...(params.maxOutputTokens && {
               generationConfig: { maxOutputTokens: params.maxOutputTokens },
             }),
@@ -229,12 +231,13 @@ export class GeminiClient {
 
     try {
       const genai = new GoogleGenerativeAI(key);
+      const geminiTools = toGeminiTools(params.tools);
       const model = genai.getGenerativeModel({
         model: params.model,
         ...(params.systemInstruction && {
           systemInstruction: params.systemInstruction,
         }),
-        ...(params.tools && { tools: params.tools }),
+        ...(geminiTools && { tools: geminiTools }),
       });
 
       const content = params.images?.length

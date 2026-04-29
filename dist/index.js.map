@@ -1,1 +1,1 @@
-{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+{"version":3,"sources":["../src/version.ts"],"sourcesContent":["/**\n * Source-of-truth package version. Imported by consumers that need to log\n * or report which ai-core build they are running against, and kept in sync\n * with package.json on every release.\n */\nexport const AI_CORE_VERSION = \"3.0.0\";\n"],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAKO,IAAM,kBAAkB;","names":[]}

@@ -8,6 +8,12 @@ export interface ProviderAdapter {
   supports(modelID: string): boolean;
   getModel(modelID: string): ModelDefinition | undefined;
   generateContent(params: GenerateParams): Promise<GenerateResponse>;
+  /**
+   * Stream incremental text chunks for a generation. Adapters that cannot
+   * stream MUST throw rather than fall back to a buffered response — silent
+   * fallback would mask capability mismatches from the router.
+   */
+  streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
 }
 
 export interface RoutePolicy {

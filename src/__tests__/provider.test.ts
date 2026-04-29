@@ -1,12 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GenerateParams } from "../client/types.js";
 import { KeyPool } from "../key-pool/index.js";
 import type { ApiKey, StorageAdapter } from "../key-pool/index.js";
 import { GeminiProviderAdapter } from "../provider/adapters/gemini.js";
 import { ProviderID } from "../provider/schema.js";
-import { defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from "../provider/models.js";
+import {
+  clearRegisteredProviders,
+  defaultProviderPriority,
+  getBuiltInModel,
+  getBuiltInProvider,
+  getModel,
+  getProvider,
+  registerProvider,
+  unregisterProvider,
+} from "../provider/models.js";
 import { ProviderRouter } from "../provider/router.js";
 import { OpenAIProviderAdapter } from "../provider/adapters/openai.js";
+import { OpenRouterProviderAdapter } from "../provider/adapters/openrouter.js";
 import type { ProviderAdapter } from "../provider/types.js";
 
 function makeKey(id: number, key: string, overrides: Partial<ApiKey> = {}): ApiKey {
@@ -49,6 +59,8 @@ function makeAdapter(keys: ApiKey[]): StorageAdapter {
 }
 
 describe("provider registry", () => {
+  afterEach(() => clearRegisteredProviders());
+
   it("exposes built-in Gemini and OpenAI providers", () => {
     expect(getBuiltInProvider(ProviderID.Gemini)?.id).toBe("gemini");
     expect(getBuiltInProvider(ProviderID.OpenAI)?.id).toBe("openai");
@@ -62,9 +74,54 @@ describe("provider registry", () => {
     expect(getBuiltInModel("gemini-2.5-flash")?.provider).toBe("gemini");
     expect(getBuiltInModel("gpt-4.1-mini")?.provider).toBe("openai");
   });
+
+  it("registers custom providers and resolves them via getProvider/getModel", () => {
+    registerProvider({
+      id: "anthropic-direct",
+      name: "Anthropic (direct)",
+      authTypes: ["api"],
+      models: [
+        {
+          id: "claude-opus-4-7",
+          provider: "anthropic-direct",
+          name: "Claude Opus 4.7",
+          capabilities: {
+            streaming: true,
+            tools: true,
+            reasoning: true,
+            multimodalInput: true,
+            multimodalOutput: false,
+          },
+        },
+      ],
+    });
+
+    expect(getProvider("anthropic-direct")?.name).toBe("Anthropic (direct)");
+    expect(getModel("claude-opus-4-7")?.provider).toBe("anthropic-direct");
+    // built-in lookups still pass through
+    expect(getProvider("openai")?.name).toBe("OpenAI");
+    expect(getModel("gpt-4.1-mini")?.provider).toBe("openai");
+  });
+
+  it("rejects re-registering a built-in provider id", () => {
+    expect(() =>
+      registerProvider({ id: "openai", name: "spoof", authTypes: ["api"], models: [] })
+    ).toThrow(/built-in/);
+  });
+
+  it("unregisterProvider removes a custom provider", () => {
+    registerProvider({ id: "tmp", name: "tmp", authTypes: ["api"], models: [] });
+    expect(getProvider("tmp")?.id).toBe("tmp");
+    expect(unregisterProvider("tmp")).toBe(true);
+    expect(getProvider("tmp")).toBeUndefined();
+  });
 });
 
 describe("provider router", () => {
+  async function* emptyStream(): AsyncGenerator<string, void, unknown> {
+    return;
+  }
+
   const geminiAdapter: ProviderAdapter = {
     provider: getBuiltInProvider("gemini")!,
     credential: { type: "pool", provider: "gemini" },
@@ -74,6 +131,7 @@ describe("provider router", () => {
       return model?.provider === "gemini" ? model : undefined;
     },
     generateContent: async (_params: GenerateParams) => ({ text: "gemini", usage: null }),
+    streamContent: () => emptyStream(),
   };
 
   const openAIAdapter: ProviderAdapter = {
@@ -85,6 +143,7 @@ describe("provider router", () => {
       return model?.provider === "openai" ? model : undefined;
     },
     generateContent: async (_params: GenerateParams) => ({ text: "openai", usage: null }),
+    streamContent: () => emptyStream(),
   };
 
   it("prefers requested provider and model when available", () => {
@@ -117,6 +176,7 @@ describe("provider router", () => {
       supports: () => false,
       getModel: () => undefined,
       generateContent: async (_params: GenerateParams) => ({ text: "first", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const secondOpenAIAdapter: ProviderAdapter = {
@@ -128,6 +188,7 @@ describe("provider router", () => {
         return model?.provider === "openai" ? model : undefined;
       },
       generateContent: async (_params: GenerateParams) => ({ text: "second", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const router = new ProviderRouter([geminiAdapter, firstOpenAIAdapter, secondOpenAIAdapter]);
@@ -147,6 +208,7 @@ describe("provider router", () => {
       supports: () => false,
       getModel: () => undefined,
       generateContent: async (_params: GenerateParams) => ({ text: "first", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const secondOpenAIAdapter: ProviderAdapter = {
@@ -158,6 +220,7 @@ describe("provider router", () => {
         return model?.provider === "openai" ? model : undefined;
       },
       generateContent: async (_params: GenerateParams) => ({ text: "second", usage: null }),
+      streamContent: () => emptyStream(),
     };
 
     const router = new ProviderRouter([firstOpenAIAdapter, secondOpenAIAdapter]);
@@ -168,6 +231,72 @@ describe("provider router", () => {
         preferredModel: "gpt-4.1-mini",
       })
     ).toThrow(/No provider\/model combination/);
+  });
+
+  it("execute() selects an adapter and runs generateContent against it", async () => {
+    const calls: GenerateParams[] = [];
+    const tracingOpenAI: ProviderAdapter = {
+      ...openAIAdapter,
+      generateContent: async (params) => {
+        calls.push(params);
+        return { text: "openai-response", usage: null };
+      },
+    };
+
+    const router = new ProviderRouter([geminiAdapter, tracingOpenAI]);
+    const result = await router.execute({ model: "gpt-4.1-mini", prompt: "hi" });
+
+    expect(result.selection.provider).toBe("openai");
+    expect(result.selection.model).toBe("gpt-4.1-mini");
+    expect(result.response.text).toBe("openai-response");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ model: "gpt-4.1-mini", prompt: "hi" });
+  });
+
+  it("execute() respects policy.preferredProviders over params.model provider", async () => {
+    const tracingGemini: ProviderAdapter = {
+      ...geminiAdapter,
+      generateContent: async () => ({ text: "gemini-response", usage: null }),
+    };
+
+    const router = new ProviderRouter([tracingGemini, openAIAdapter]);
+    const result = await router.execute(
+      { model: "gemini-2.5-flash", prompt: "hi" },
+      { preferredProviders: [ProviderID.Gemini] }
+    );
+
+    expect(result.selection.provider).toBe("gemini");
+    expect(result.response.text).toBe("gemini-response");
+  });
+
+  it("executeStream() selects an adapter and yields its stream chunks", async () => {
+    async function* fakeStream() {
+      yield "a";
+      yield "b";
+    }
+    const streamingOpenAI: ProviderAdapter = {
+      ...openAIAdapter,
+      streamContent: () => fakeStream(),
+    };
+
+    const router = new ProviderRouter([geminiAdapter, streamingOpenAI]);
+    const { selection, stream } = router.executeStream({ model: "gpt-4.1-mini", prompt: "hi" });
+    expect(selection.provider).toBe("openai");
+
+    const out: string[] = [];
+    for await (const chunk of stream) out.push(chunk);
+    expect(out).toEqual(["a", "b"]);
+  });
+
+  it("execute() does not silently fall back to a different model when policy disallows it", async () => {
+    const router = new ProviderRouter([geminiAdapter, openAIAdapter]);
+
+    await expect(
+      router.execute(
+        { model: "claude-opus-4-7", prompt: "hi" },
+        { preferredProviders: [ProviderID.OpenAI] }
+      )
+    ).rejects.toThrow(/No provider\/model combination/);
   });
 
   it("selects the Gemini compatibility adapter with explicit pool credential reference", () => {
@@ -212,7 +341,7 @@ describe("openai provider adapter", () => {
     expect(result.usage?.totalTokens).toBe(15);
   });
 
-  it("rejects unsupported multimodal or tools input in phase 1", async () => {
+  it("rejects unsupported multimodal input in phase 1", async () => {
     const adapter = new OpenAIProviderAdapter({
       type: "api",
       provider: "openai",
@@ -226,13 +355,174 @@ describe("openai provider adapter", () => {
         images: [{ type: "inline", mimeType: "image/png", data: "abc" }],
       })
     ).rejects.toThrow(/multimodal/);
+  });
 
-    await expect(
-      adapter.generateContent({
-        model: "gpt-4.1-mini",
-        prompt: "hello",
-        tools: [{} as never],
-      })
-    ).rejects.toThrow(/tools/);
+  it("streams chat completions deltas via SSE", async () => {
+    const sseLines = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" } }] })}`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: " world" } }] })}`,
+      `data: [DONE]`,
+      ``,
+    ].join("\n");
+
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseLines));
+        controller.close();
+      },
+    });
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      body,
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "stream-key",
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of adapter.streamContent({ model: "gpt-4.1-mini", prompt: "hi" })) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toEqual(["Hello", " world"]);
+  });
+
+  it("forwards function tools to OpenAI in the chat completions tools format", async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
+      capturedBody = JSON.parse(init.body) as Record<string, unknown>;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "test-key",
+    });
+
+    await adapter.generateContent({
+      model: "gpt-4.1-mini",
+      prompt: "hi",
+      tools: [
+        {
+          type: "function",
+          name: "lookup_weather",
+          description: "Look up the weather",
+          parameters: { type: "object", properties: { city: { type: "string" } } },
+        },
+        {
+          type: "provider-native",
+          provider: "gemini",
+          config: { googleSearch: {} },
+        },
+      ],
+    });
+
+    expect(capturedBody?.tools).toEqual([
+      {
+        type: "function",
+        function: {
+          name: "lookup_weather",
+          description: "Look up the weather",
+          parameters: { type: "object", properties: { city: { type: "string" } } },
+        },
+      },
+    ]);
+  });
+});
+
+describe("openrouter provider adapter", () => {
+  it("hits the OpenRouter base URL and forwards attribution headers", async () => {
+    let capturedUrl = "";
+    let capturedHeaders: Record<string, string> = {};
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
+      capturedUrl = url;
+      capturedHeaders = init.headers;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok via openrouter" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenRouterProviderAdapter(
+      { type: "api", provider: "openrouter", apiKey: "or-key" },
+      { referer: "https://example.com", appTitle: "TestApp" }
+    );
+
+    const result = await adapter.generateContent({ model: "openrouter/auto", prompt: "hi" });
+
+    expect(capturedUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(capturedHeaders["Authorization"]).toBe("Bearer or-key");
+    expect(capturedHeaders["HTTP-Referer"]).toBe("https://example.com");
+    expect(capturedHeaders["X-Title"]).toBe("TestApp");
+    expect(result.text).toBe("ok via openrouter");
+  });
+
+  it("exposes additionalModels alongside the built-in catalog without leaking globally", () => {
+    const adapter = new OpenRouterProviderAdapter(
+      { type: "api", provider: "openrouter", apiKey: "or-key" },
+      {
+        additionalModels: [
+          {
+            id: "anthropic/claude-sonnet-4.5",
+            provider: "openrouter",
+            name: "Claude Sonnet 4.5 via OpenRouter",
+            capabilities: {
+              streaming: true,
+              tools: true,
+              reasoning: true,
+              multimodalInput: true,
+              multimodalOutput: false,
+            },
+          },
+        ],
+      }
+    );
+
+    expect(adapter.supports("anthropic/claude-sonnet-4.5")).toBe(true);
+    // built-in catalog must remain unmodified
+    expect(getBuiltInProvider("openrouter")?.models.some(
+      (m) => m.id === "anthropic/claude-sonnet-4.5"
+    )).toBe(false);
+  });
+
+  it("only forwards openrouter-tagged native tools", async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
+      capturedBody = JSON.parse(init.body) as Record<string, unknown>;
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenRouterProviderAdapter({
+      type: "api",
+      provider: "openrouter",
+      apiKey: "or-key",
+    });
+
+    await adapter.generateContent({
+      model: "openrouter/auto",
+      prompt: "hi",
+      tools: [
+        { type: "provider-native", provider: "openai", config: { type: "web_search_preview" } },
+        { type: "provider-native", provider: "openrouter", config: { type: "web_search" } },
+      ],
+    });
+
+    expect(capturedBody?.tools).toEqual([{ type: "web_search" }]);
   });
 });

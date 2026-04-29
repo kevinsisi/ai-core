@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { classifyError } from "../retry/classify-error.js";
+import {
+  classifyError,
+  classifyGeminiError,
+  classifyOpenAIError,
+  getProviderClassifier,
+  registerProviderClassifier,
+  unregisterProviderClassifier,
+} from "../retry/classify-error.js";
 import { withRetry } from "../retry/with-retry.js";
 import { MaxRetriesExceededError } from "../retry/types.js";
 import { NoAvailableKeyError } from "../key-pool/types.js";
@@ -58,6 +65,57 @@ describe("classifyError", () => {
 
   it("classifies unknown errors as unknown", () => {
     expect(classifyError(new Error("some random error"))).toBe("unknown");
+  });
+});
+
+// ── classifyOpenAIError ───────────────────────────────────────────────
+
+describe("classifyOpenAIError", () => {
+  it("classifies insufficient_quota as quota", () => {
+    expect(classifyOpenAIError(new Error("insufficient_quota: ..."))).toBe("quota");
+  });
+
+  it("classifies rate_limit_exceeded as rate-limit", () => {
+    expect(classifyOpenAIError(new Error("rate_limit_exceeded: too fast"))).toBe("rate-limit");
+  });
+
+  it("classifies invalid_api_key as fatal", () => {
+    expect(classifyOpenAIError(new Error("invalid_api_key"))).toBe("fatal");
+  });
+
+  it("treats 401 with no body as fatal", () => {
+    const err = Object.assign(new Error("Unauthorized"), { status: 401 });
+    expect(classifyOpenAIError(err)).toBe("fatal");
+  });
+
+  it("treats 5xx as network", () => {
+    const err = Object.assign(new Error("server_error"), { status: 503 });
+    expect(classifyOpenAIError(err)).toBe("network");
+  });
+});
+
+// ── provider classifier registry ──────────────────────────────────────
+
+describe("getProviderClassifier", () => {
+  it("returns the openai classifier for openai/openrouter ids", () => {
+    expect(getProviderClassifier("openai")).toBe(classifyOpenAIError);
+    expect(getProviderClassifier("openrouter")).toBe(classifyOpenAIError);
+  });
+
+  it("returns the gemini classifier for gemini id", () => {
+    expect(getProviderClassifier("gemini")).toBe(classifyGeminiError);
+  });
+
+  it("falls back to the default classifier for unregistered ids", () => {
+    expect(getProviderClassifier("bespoke-provider")).toBe(classifyError);
+  });
+
+  it("supports registering and unregistering custom classifiers", () => {
+    const custom = () => "fatal" as const;
+    registerProviderClassifier("bespoke-provider", custom);
+    expect(getProviderClassifier("bespoke-provider")).toBe(custom);
+    expect(unregisterProviderClassifier("bespoke-provider")).toBe(true);
+    expect(getProviderClassifier("bespoke-provider")).toBe(classifyError);
   });
 });
 

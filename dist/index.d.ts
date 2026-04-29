@@ -1,10 +1,19 @@
 export { A as ApiKey, K as KeyPool, a as KeyPoolOptions, N as NoAvailableKeyError, S as StorageAdapter } from './key-pool-CQHu-T7W.js';
 export { SqliteAdapter, SqliteDatabase } from './key-pool/index.js';
-export { classifyError, withRetry } from './retry/index.js';
+export { ProviderErrorClassifier, classifyError, classifyGeminiError, classifyOpenAIError, getProviderClassifier, registerProviderClassifier, unregisterProviderClassifier, withRetry } from './retry/index.js';
 export { E as ErrorClass, M as MaxRetriesExceededError, R as RetryEvent, a as RetryOptions } from './types-xF6t7Rx7.js';
-export { GeminiClient } from './client/index.js';
-export { C as ChatMessage, a as ClientOptions, G as GenerateParams, b as GenerateResponse, S as StreamInterruptedError, T as TokenUsage } from './types-DPIsmmhM.js';
+export { GeminiClient, MultiProviderClient, MultiProviderClientOptions, toGeminiTools, toOpenAITools } from './client/index.js';
+export { A as ApiKeyCredential, C as ChatMessage, a as ClientOptions, F as FunctionTool, G as GenerateParams, b as GenerateResponse, M as ModelDefinition, c as ModelID, O as OAuthCredential, P as ProviderAdapter, d as ProviderAuthType, e as ProviderCapabilities, f as ProviderCredential, g as ProviderDefinition, h as ProviderID, i as ProviderNativeTool, j as ProviderRouter, R as RoutePolicy, k as RoutedProviderSelection, S as StreamInterruptedError, T as TokenUsage, l as Tool } from './router-pOwkt_gE.js';
 export { ActiveTask, AgentRuntime, AgentRuntimeOptions, CheckpointPriority, CheckpointStatus, CompletionCheckResult, InterruptClassification, InterruptEvent, PendingAction, TaskCheckpoint, TaskStatus } from './agent-runtime/index.js';
 export { LeaseHeartbeat, PlannedStepAssignment, RunnableStep, StepDefinition, StepExecutionMetadata, StepExecutionResult, StepRunner, StepRunnerOptions, planPreferredKeys } from './step-orchestration/index.js';
-export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, ModelID, OAuthCredential, OpenAIProviderAdapter, ProviderAdapter, ProviderAuthType, ProviderCapabilities, ProviderCredential, ProviderDefinition, ProviderID, ProviderRouter, RoutePolicy, RoutedProviderSelection, builtInProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider } from './provider/index.js';
+export { GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterAdapterOptions, OpenRouterProviderAdapter, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider } from './provider/index.js';
 import '@google/generative-ai';
+
+/**
+ * Source-of-truth package version. Imported by consumers that need to log
+ * or report which ai-core build they are running against, and kept in sync
+ * with package.json on every release.
+ */
+declare const AI_CORE_VERSION = "3.0.0";
+
+export { AI_CORE_VERSION };

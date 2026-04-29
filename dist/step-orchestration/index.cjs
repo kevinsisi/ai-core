@@ -136,14 +136,17 @@ var NoAvailableKeyError = class extends Error {
 };
 
 // src/retry/classify-error.ts
-function classifyError(err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  const lower = msg.toLowerCase();
+function shapeError(err) {
+  const message = err instanceof Error ? err.message : String(err);
   const status = err?.["status"] ?? err?.["httpStatusCode"] ?? 0;
+  return { message, lower: message.toLowerCase(), status };
+}
+function classifyGeminiError(err) {
+  const { lower, status } = shapeError(err);
   if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
     return "fatal";
   }
-  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("rateLimitExceeded")) {
+  if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
     if (lower.includes("quota") || lower.includes("resource_exhausted")) {
       return "quota";
     }
@@ -154,6 +157,7 @@ function classifyError(err) {
   }
   return "unknown";
 }
+var classifyError = classifyGeminiError;
 
 // src/retry/types.ts
 var MaxRetriesExceededError = class extends Error {
