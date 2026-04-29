@@ -8,3 +8,12 @@ export { ActiveTask, AgentRuntime, AgentRuntimeOptions, CheckpointPriority, Chec
 export { LeaseHeartbeat, PlannedStepAssignment, RunnableStep, StepDefinition, StepExecutionMetadata, StepExecutionResult, StepRunner, StepRunnerOptions, planPreferredKeys } from './step-orchestration/index.js';
 export { GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterAdapterOptions, OpenRouterProviderAdapter, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider } from './provider/index.js';
 import '@google/generative-ai';
+
+/**
+ * Source-of-truth package version. Imported by consumers that need to log
+ * or report which ai-core build they are running against, and kept in sync
+ * with package.json on every release.
+ */
+declare const AI_CORE_VERSION = "3.0.0";
+
+export { AI_CORE_VERSION };

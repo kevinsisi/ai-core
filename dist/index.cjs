@@ -20,6 +20,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  AI_CORE_VERSION: () => AI_CORE_VERSION,
   AgentRuntime: () => AgentRuntime,
   GeminiClient: () => GeminiClient,
   GeminiProviderAdapter: () => GeminiProviderAdapter,
@@ -58,6 +59,9 @@ __export(index_exports, {
   withRetry: () => withRetry
 });
 module.exports = __toCommonJS(index_exports);
+
+// src/version.ts
+var AI_CORE_VERSION = "3.0.0";
 
 // src/key-pool/types.ts
 var NoAvailableKeyError = class extends Error {
@@ -1866,6 +1870,7 @@ var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  AI_CORE_VERSION,
   AgentRuntime,
   GeminiClient,
   GeminiProviderAdapter,

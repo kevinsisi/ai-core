@@ -1,3 +1,6 @@
+// Version
+export { AI_CORE_VERSION } from "./version.js";
+
 // Key Pool
 export { KeyPool, SqliteAdapter, NoAvailableKeyError } from "./key-pool/index.js";
 export type {

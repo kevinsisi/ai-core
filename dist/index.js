@@ -5,6 +5,16 @@ import {
   MultiProviderClient
 } from "./chunk-UQCO7H7A.js";
 import {
+  LeaseHeartbeat,
+  StepRunner,
+  planPreferredKeys
+} from "./chunk-BOMBZZRG.js";
+import {
+  KeyPool,
+  SqliteAdapter
+} from "./chunk-KUFFHZDJ.js";
+import "./chunk-U42SY5KL.js";
+import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
@@ -29,16 +39,6 @@ import {
   unregisterProvider
 } from "./chunk-PWSNKNQE.js";
 import {
-  LeaseHeartbeat,
-  StepRunner,
-  planPreferredKeys
-} from "./chunk-BOMBZZRG.js";
-import {
-  KeyPool,
-  SqliteAdapter
-} from "./chunk-KUFFHZDJ.js";
-import "./chunk-U42SY5KL.js";
-import {
   MaxRetriesExceededError,
   classifyError,
   classifyGeminiError,
@@ -51,7 +51,11 @@ import {
 import {
   NoAvailableKeyError
 } from "./chunk-NHGYIXGT.js";
+
+// src/version.ts
+var AI_CORE_VERSION = "3.0.0";
 export {
+  AI_CORE_VERSION,
   AgentRuntime,
   GeminiClient,
   GeminiProviderAdapter,
