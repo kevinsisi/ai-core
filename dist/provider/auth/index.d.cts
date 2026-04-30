@@ -1,5 +1,5 @@
-import { O as OAuthCredential } from '../../types-Dbm33_oG.cjs';
-export { A as ApiKeyCredential, P as PoolCredential, b as ProviderAuthType, d as ProviderCredential } from '../../types-Dbm33_oG.cjs';
+import { O as OAuthCredential } from '../../types-DG3Ftj0c.cjs';
+export { A as ApiKeyCredential, P as PoolCredential, b as ProviderAuthType, d as ProviderCredential, i as isOAuthCredentialExpired } from '../../types-DG3Ftj0c.cjs';
 
 interface StartOpenAIAuthOptions {
     /**

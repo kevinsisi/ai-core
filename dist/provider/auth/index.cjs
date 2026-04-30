@@ -31,10 +31,19 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var auth_exports = {};
 __export(auth_exports, {
   OpenAIOAuthError: () => OpenAIOAuthError,
+  isOAuthCredentialExpired: () => isOAuthCredentialExpired,
   refreshOpenAIToken: () => refreshOpenAIToken,
   startOpenAIAuth: () => startOpenAIAuth
 });
 module.exports = __toCommonJS(auth_exports);
+
+// src/provider/auth/types.ts
+function isOAuthCredentialExpired(credential, leewayMs = 6e4) {
+  if (!credential.expiresAt) return false;
+  const exp = Date.parse(credential.expiresAt);
+  if (Number.isNaN(exp)) return false;
+  return Date.now() + leewayMs >= exp;
+}
 
 // src/provider/auth/openai.ts
 var import_node_child_process = require("child_process");
@@ -276,6 +285,7 @@ function openBrowser(url) {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   OpenAIOAuthError,
+  isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
 });

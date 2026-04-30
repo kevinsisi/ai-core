@@ -88,6 +88,7 @@ export {
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter,
   OpenAIOAuthError,
+  isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth,
 } from "./provider/index.js";

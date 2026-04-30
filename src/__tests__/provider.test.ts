@@ -313,6 +313,38 @@ describe("provider router", () => {
       credentialRef: "gemini-pool",
     });
   });
+
+  it("Gemini adapter accepts arbitrary gemini-* model ids without registry updates", () => {
+    const pool = new KeyPool(makeAdapter([makeKey(1, "g-key")]));
+    const adapter = new GeminiProviderAdapter(pool);
+
+    expect(adapter.supports("gemini-2.5-flash")).toBe(true);
+    expect(adapter.supports("gemini-2.5-pro")).toBe(true);
+    expect(adapter.supports("gemini-3-flash-experimental")).toBe(true);
+
+    // Non-Gemini ids must still fail closed.
+    expect(adapter.supports("gpt-4o")).toBe(false);
+    expect(adapter.supports("claude-opus-4-7")).toBe(false);
+
+    const synthesized = adapter.getModel("gemini-2.5-pro");
+    expect(synthesized?.id).toBe("gemini-2.5-pro");
+    expect(synthesized?.provider).toBe("gemini");
+    expect(synthesized?.capabilities.multimodalInput).toBe(true);
+  });
+
+  it("router resolves arbitrary gemini-* models when only the GeminiProviderAdapter is registered", () => {
+    const pool = new KeyPool(makeAdapter([makeKey(1, "g-key")]));
+    const adapter = new GeminiProviderAdapter(pool);
+    const router = new ProviderRouter([adapter]);
+
+    const selected = router.select({
+      preferredProviders: [ProviderID.Gemini],
+      preferredModel: "gemini-2.5-pro",
+    });
+
+    expect(selected.model).toBe("gemini-2.5-pro");
+    expect(selected.provider).toBe("gemini");
+  });
 });
 
 describe("openai provider adapter", () => {
@@ -391,6 +423,34 @@ describe("openai provider adapter", () => {
       chunks.push(chunk);
     }
     expect(chunks).toEqual(["Hello", " world"]);
+  });
+
+  it("accepts arbitrary gpt-* and reasoning model ids without registry updates", () => {
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "test-key",
+    });
+
+    expect(adapter.supports("gpt-4o")).toBe(true);
+    expect(adapter.supports("gpt-4o-mini")).toBe(true);
+    expect(adapter.supports("gpt-5-thinking")).toBe(true);
+    expect(adapter.supports("o1-mini")).toBe(true);
+    expect(adapter.supports("o3-mini")).toBe(true);
+    expect(adapter.supports("o4-mini")).toBe(true);
+    expect(adapter.supports("chatgpt-4o-latest")).toBe(true);
+
+    // Non-OpenAI ids must still fail closed — no silent acceptance.
+    expect(adapter.supports("gemini-2.5-flash")).toBe(false);
+    expect(adapter.supports("claude-opus-4-7")).toBe(false);
+
+    const synthesized = adapter.getModel("gpt-4o");
+    expect(synthesized?.id).toBe("gpt-4o");
+    expect(synthesized?.provider).toBe("openai");
+    expect(synthesized?.capabilities.streaming).toBe(true);
+
+    const reasoning = adapter.getModel("o3-mini");
+    expect(reasoning?.capabilities.reasoning).toBe(true);
   });
 
   it("forwards function tools to OpenAI in the chat completions tools format", async () => {

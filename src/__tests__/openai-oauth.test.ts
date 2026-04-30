@@ -5,6 +5,8 @@ import {
   refreshOpenAIToken,
   startOpenAIAuth,
 } from "../provider/auth/openai.js";
+import { isOAuthCredentialExpired } from "../provider/auth/types.js";
+import type { OAuthCredential } from "../provider/auth/types.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -153,6 +155,47 @@ describe("refreshOpenAIToken", () => {
   it("throws OpenAIOAuthError on non-2xx response", async () => {
     fetchMock.mockResolvedValueOnce(new Response("nope", { status: 401 }));
     await expect(refreshOpenAIToken("bad")).rejects.toBeInstanceOf(OpenAIOAuthError);
+  });
+});
+
+describe("isOAuthCredentialExpired", () => {
+  function makeCred(expiresAt: string | undefined): OAuthCredential {
+    return {
+      type: "oauth",
+      provider: "openai",
+      accessToken: "tok",
+      ...(expiresAt && { expiresAt }),
+    };
+  }
+
+  it("returns false when expiresAt is missing (caller should fall back to 401)", () => {
+    expect(isOAuthCredentialExpired(makeCred(undefined))).toBe(false);
+  });
+
+  it("returns false for an unparseable expiresAt", () => {
+    expect(isOAuthCredentialExpired(makeCred("not a date"))).toBe(false);
+  });
+
+  it("returns true when expiry has already passed", () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    expect(isOAuthCredentialExpired(makeCred(past))).toBe(true);
+  });
+
+  it("returns true within the leeway window (treats near-expiry as expired)", () => {
+    // Default leeway is 60s — a token expiring 30s from now should look expired.
+    const soon = new Date(Date.now() + 30_000).toISOString();
+    expect(isOAuthCredentialExpired(makeCred(soon))).toBe(true);
+  });
+
+  it("returns false when expiry is comfortably in the future", () => {
+    const later = new Date(Date.now() + 10 * 60_000).toISOString();
+    expect(isOAuthCredentialExpired(makeCred(later))).toBe(false);
+  });
+
+  it("respects a custom leeway (0ms = treat exactly-at-expiry as expired)", () => {
+    const inFiveSeconds = new Date(Date.now() + 5_000).toISOString();
+    expect(isOAuthCredentialExpired(makeCred(inFiveSeconds), 0)).toBe(false);
+    expect(isOAuthCredentialExpired(makeCred(inFiveSeconds), 10_000)).toBe(true);
   });
 });
 

@@ -1,11 +1,13 @@
 import {
   OpenAIOAuthError,
+  isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "../../chunk-X3XZ7O7J.js";
+} from "../../chunk-2AM2WEL7.js";
 import "../../chunk-ROU2NLPU.js";
 export {
   OpenAIOAuthError,
+  isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
 };

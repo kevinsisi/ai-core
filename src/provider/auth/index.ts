@@ -5,5 +5,6 @@ export type {
   ProviderAuthType,
   ProviderCredential,
 } from "./types.js";
+export { isOAuthCredentialExpired } from "./types.js";
 export { OpenAIOAuthError, refreshOpenAIToken, startOpenAIAuth } from "./openai.js";
 export type { StartOpenAIAuthOptions } from "./openai.js";

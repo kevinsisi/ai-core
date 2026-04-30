@@ -57,5 +57,16 @@ interface PoolCredential {
     credentialLabel?: string;
 }
 type ProviderCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
+/**
+ * Returns true when the credential's `expiresAt` (if any) is at or past the
+ * current time, accounting for `leewayMs` so callers can refresh slightly
+ * ahead of the hard expiry. When `expiresAt` is missing or unparseable the
+ * credential is treated as not-yet-expired — callers should fall back to a
+ * 401-driven refresh in that case.
+ *
+ * Defaults to a 60-second leeway so a token that expires "right now" while
+ * the request is in flight is not considered still-valid.
+ */
+declare function isOAuthCredentialExpired(credential: OAuthCredential, leewayMs?: number): boolean;
 
-export { type ApiKeyCredential as A, type ModelDefinition as M, type OAuthCredential as O, type PoolCredential as P, type ModelID as a, type ProviderAuthType as b, type ProviderCapabilities as c, type ProviderCredential as d, type ProviderDefinition as e, ProviderID as f };
+export { type ApiKeyCredential as A, type ModelDefinition as M, type OAuthCredential as O, type PoolCredential as P, type ModelID as a, type ProviderAuthType as b, type ProviderCapabilities as c, type ProviderCredential as d, type ProviderDefinition as e, ProviderID as f, isOAuthCredentialExpired as i };

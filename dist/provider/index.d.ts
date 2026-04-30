@@ -1,8 +1,8 @@
-import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-Dbm33_oG.js';
-export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID } from '../types-Dbm33_oG.js';
+import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-DG3Ftj0c.js';
+export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-DG3Ftj0c.js';
 export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './auth/index.js';
-import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-J1UJIOJ8.js';
-export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-J1UJIOJ8.js';
+import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-DugyBUTm.js';
+export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-DugyBUTm.js';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
 
 declare const builtInProviders: ProviderDefinition[];
@@ -70,6 +70,8 @@ declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
     protected readonly defaultBaseURL = "https://api.openai.com/v1";
     protected readonly nativeToolProvider = "openai";
     constructor(credential: ApiKeyCredential | OAuthCredential);
+    supports(modelID: string): boolean;
+    getModel(modelID: string): ModelDefinition | undefined;
     protected buildHeaders(): Record<string, string>;
 }
 

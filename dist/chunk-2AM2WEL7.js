@@ -2,6 +2,14 @@ import {
   ProviderID
 } from "./chunk-ROU2NLPU.js";
 
+// src/provider/auth/types.ts
+function isOAuthCredentialExpired(credential, leewayMs = 6e4) {
+  if (!credential.expiresAt) return false;
+  const exp = Date.parse(credential.expiresAt);
+  if (Number.isNaN(exp)) return false;
+  return Date.now() + leewayMs >= exp;
+}
+
 // src/provider/auth/openai.ts
 import { spawn } from "child_process";
 import * as crypto from "crypto";
@@ -232,8 +240,9 @@ function openBrowser(url) {
 }
 
 export {
+  isOAuthCredentialExpired,
   startOpenAIAuth,
   refreshOpenAIToken,
   OpenAIOAuthError
 };
-//# sourceMappingURL=chunk-X3XZ7O7J.js.map
+//# sourceMappingURL=chunk-2AM2WEL7.js.map

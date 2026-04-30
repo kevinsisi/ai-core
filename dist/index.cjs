@@ -59,6 +59,7 @@ __export(index_exports, {
   getModel: () => getModel,
   getProvider: () => getProvider,
   getProviderClassifier: () => getProviderClassifier,
+  isOAuthCredentialExpired: () => isOAuthCredentialExpired,
   listRegisteredProviders: () => listRegisteredProviders,
   planPreferredKeys: () => planPreferredKeys,
   refreshOpenAIToken: () => refreshOpenAIToken,
@@ -74,7 +75,7 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // src/version.ts
-var AI_CORE_VERSION = "3.1.0";
+var AI_CORE_VERSION = "3.2.0";
 
 // src/key-pool/types.ts
 var NoAvailableKeyError = class extends Error {
@@ -495,7 +496,10 @@ function shapeError(err) {
 }
 function classifyGeminiError(err) {
   const { lower, status } = shapeError(err);
-  if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
+  if (status === 401 || lower.includes("unauthenticated")) {
+    return "auth";
+  }
+  if (status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
     return "fatal";
   }
   if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
@@ -511,7 +515,10 @@ function classifyGeminiError(err) {
 }
 function classifyOpenAIError(err) {
   const { lower, status } = shapeError(err);
-  if (status === 401 || status === 400 || status === 403 || lower.includes("invalid_api_key") || lower.includes("invalid api key") || lower.includes("incorrect api key") || lower.includes("account_deactivated") || lower.includes("permission_denied")) {
+  if (status === 401 || lower.includes("token_expired") || lower.includes("expired_token") || lower.includes("invalid_token")) {
+    return "auth";
+  }
+  if (status === 400 || status === 403 || lower.includes("invalid_api_key") || lower.includes("invalid api key") || lower.includes("incorrect api key") || lower.includes("account_deactivated") || lower.includes("permission_denied")) {
     return "fatal";
   }
   if (status === 429 || lower.includes("insufficient_quota") || lower.includes("billing_hard_limit") || lower.includes("quota") || lower.includes("rate_limit_exceeded") || lower.includes("rate limit") || lower.includes("tokens_per_min")) {
@@ -609,6 +616,7 @@ async function withRetry(fn, initialKey, options = {}) {
           await sleep(backoff);
           break;
         }
+        case "auth":
         case "fatal":
         case "unknown":
           throw err;
@@ -1678,6 +1686,14 @@ var StepRunner = class {
   }
 };
 
+// src/provider/auth/types.ts
+function isOAuthCredentialExpired(credential, leewayMs = 6e4) {
+  if (!credential.expiresAt) return false;
+  const exp = Date.parse(credential.expiresAt);
+  if (Number.isNaN(exp)) return false;
+  return Date.now() + leewayMs >= exp;
+}
+
 // src/provider/auth/openai.ts
 var import_node_child_process = require("child_process");
 var crypto = __toESM(require("crypto"), 1);
@@ -1908,6 +1924,23 @@ function openBrowser(url) {
 }
 
 // src/provider/adapters/gemini.ts
+function isLikelyGeminiModel(modelID) {
+  return /^gemini-/i.test(modelID);
+}
+function synthesizeGeminiModel(modelID) {
+  return {
+    id: modelID,
+    provider: ProviderID.Gemini,
+    name: modelID,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: false
+    }
+  };
+}
 var GeminiProviderAdapter = class {
   provider = getBuiltInProvider("gemini");
   credential;
@@ -1917,12 +1950,14 @@ var GeminiProviderAdapter = class {
     this.client = new GeminiClient(pool, { maxRetries });
   }
   supports(modelID) {
-    return this.provider.models.some((model) => model.id === modelID);
+    if (this.provider.models.some((model) => model.id === modelID)) return true;
+    return isLikelyGeminiModel(modelID);
   }
   getModel(modelID) {
-    const model = getBuiltInModel(modelID);
-    if (!model || model.provider !== this.provider.id) return void 0;
-    return model;
+    const builtIn = getBuiltInModel(modelID);
+    if (builtIn && builtIn.provider === this.provider.id) return builtIn;
+    if (isLikelyGeminiModel(modelID)) return synthesizeGeminiModel(modelID);
+    return void 0;
   }
   async generateContent(params) {
     return this.client.generateContent(params);
@@ -2074,12 +2109,36 @@ var OpenAICompatibleAdapter = class {
 };
 
 // src/provider/adapters/openai.ts
+function isLikelyOpenAIModel(modelID) {
+  return /^gpt-/i.test(modelID) || /^o[134]([.\-]|$)/i.test(modelID) || /^chatgpt-/i.test(modelID);
+}
+var REASONING_FAMILIES = /^o[134]([.\-]|$)/i;
+function synthesizeOpenAIModel(modelID) {
+  return {
+    id: modelID,
+    provider: ProviderID.OpenAI,
+    name: modelID,
+    capabilities: {
+      streaming: true,
+      tools: true,
+      reasoning: REASONING_FAMILIES.test(modelID),
+      multimodalInput: false,
+      multimodalOutput: false
+    }
+  };
+}
 var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
   provider = getBuiltInProvider("openai");
   defaultBaseURL = "https://api.openai.com/v1";
   nativeToolProvider = "openai";
   constructor(credential) {
     super(credential);
+  }
+  supports(modelID) {
+    return super.supports(modelID) || isLikelyOpenAIModel(modelID);
+  }
+  getModel(modelID) {
+    return super.getModel(modelID) ?? (isLikelyOpenAIModel(modelID) ? synthesizeOpenAIModel(modelID) : void 0);
   }
   buildHeaders() {
     const headers = super.buildHeaders();
@@ -2143,6 +2202,7 @@ var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
   getModel,
   getProvider,
   getProviderClassifier,
+  isOAuthCredentialExpired,
   listRegisteredProviders,
   planPreferredKeys,
   refreshOpenAIToken,

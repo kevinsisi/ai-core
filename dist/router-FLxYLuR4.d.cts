@@ -1,4 +1,4 @@
-import { e as ProviderDefinition, d as ProviderCredential, M as ModelDefinition, f as ProviderID, c as ProviderCapabilities } from './types-Dbm33_oG.cjs';
+import { e as ProviderDefinition, d as ProviderCredential, M as ModelDefinition, f as ProviderID, c as ProviderCapabilities } from './types-DG3Ftj0c.cjs';
 
 interface ChatMessage {
     role: "user" | "model";

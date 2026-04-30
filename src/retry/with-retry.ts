@@ -80,9 +80,13 @@ export async function withRetry<T>(
           break;
         }
 
+        case "auth":
         case "fatal":
         case "unknown":
-          // Never retry these
+          // Never auto-retry these. `auth` is surfaced verbatim so the
+          // wrapping consumer (e.g. an OAuth-aware adapter) can refresh and
+          // re-issue the call on its own terms; withRetry stays credential-
+          // agnostic and does not try to refresh anything itself.
           throw err;
       }
     }

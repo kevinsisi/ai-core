@@ -3,4 +3,4 @@
  * or report which ai-core build they are running against, and kept in sync
  * with package.json on every release.
  */
-export const AI_CORE_VERSION = "3.1.0";
+export const AI_CORE_VERSION = "3.2.0";

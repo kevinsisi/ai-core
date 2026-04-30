@@ -3,7 +3,7 @@ import {
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenRouterProviderAdapter
-} from "../chunk-7IKSYRI2.js";
+} from "../chunk-E2PPJDKT.js";
 import {
   ProviderRouter,
   builtInProviders,
@@ -16,14 +16,15 @@ import {
   listRegisteredProviders,
   registerProvider,
   unregisterProvider
-} from "../chunk-7PJJJTXS.js";
-import "../chunk-VOOZSXX5.js";
+} from "../chunk-2OJQQQNV.js";
+import "../chunk-YUQCRD55.js";
 import "../chunk-NHGYIXGT.js";
 import {
   OpenAIOAuthError,
+  isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "../chunk-X3XZ7O7J.js";
+} from "../chunk-2AM2WEL7.js";
 import {
   ProviderID
 } from "../chunk-ROU2NLPU.js";
@@ -42,6 +43,7 @@ export {
   getBuiltInProvider,
   getModel,
   getProvider,
+  isOAuthCredentialExpired,
   listRegisteredProviders,
   refreshOpenAIToken,
   registerProvider,

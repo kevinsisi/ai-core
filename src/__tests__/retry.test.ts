@@ -30,9 +30,9 @@ describe("classifyError", () => {
     expect(classifyError(new Error("rate_limit exceeded"))).toBe("rate-limit");
   });
 
-  it("classifies 401 status as fatal", () => {
+  it("classifies 401 status as auth", () => {
     const err = Object.assign(new Error("Unauthorized"), { status: 401 });
-    expect(classifyError(err)).toBe("fatal");
+    expect(classifyError(err)).toBe("auth");
   });
 
   it("classifies 403 status as fatal", () => {
@@ -83,9 +83,19 @@ describe("classifyOpenAIError", () => {
     expect(classifyOpenAIError(new Error("invalid_api_key"))).toBe("fatal");
   });
 
-  it("treats 401 with no body as fatal", () => {
+  it("treats 401 with no body as auth (refresh signal)", () => {
     const err = Object.assign(new Error("Unauthorized"), { status: 401 });
-    expect(classifyOpenAIError(err)).toBe("fatal");
+    expect(classifyOpenAIError(err)).toBe("auth");
+  });
+
+  it("treats token_expired body as auth", () => {
+    expect(classifyOpenAIError(new Error("token_expired"))).toBe("auth");
+  });
+
+  it("keeps 403 / invalid_api_key as fatal (not refreshable)", () => {
+    expect(classifyOpenAIError(new Error("invalid_api_key"))).toBe("fatal");
+    const forbidden = Object.assign(new Error("forbidden"), { status: 403 });
+    expect(classifyOpenAIError(forbidden)).toBe("fatal");
   });
 
   it("treats 5xx as network", () => {
@@ -164,13 +174,26 @@ describe("withRetry", () => {
   });
 
   it("does NOT retry on fatal error", async () => {
+    // 403 + invalid-api-key body keeps this in `fatal` after the 401-split.
     const fatalErr = Object.assign(new Error("api_key_invalid"), {
-      status: 401,
+      status: 403,
     });
     const fn = vi.fn().mockRejectedValue(fatalErr);
 
     await expect(withRetry(fn, "key1")).rejects.toThrow(fatalErr);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT auto-retry on auth error and surfaces it to onRetry", async () => {
+    const authErr = Object.assign(new Error("Unauthorized"), { status: 401 });
+    const fn = vi.fn().mockRejectedValue(authErr);
+    const onRetry = vi.fn();
+
+    await expect(withRetry(fn, "key1", { onRetry })).rejects.toThrow(authErr);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(onRetry).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: "auth" })
+    );
   });
 
   it("does NOT retry on unknown error", async () => {

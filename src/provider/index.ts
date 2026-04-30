@@ -8,6 +8,7 @@ export type {
   ProviderCredential,
   StartOpenAIAuthOptions,
 } from "./auth/index.js";
+export { isOAuthCredentialExpired } from "./auth/index.js";
 export { OpenAIOAuthError, refreshOpenAIToken, startOpenAIAuth } from "./auth/index.js";
 export {
   builtInProviders,

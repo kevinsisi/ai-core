@@ -2,10 +2,14 @@
  * - quota: RESOURCE_EXHAUSTED / 429 — key used up, rotate key
  * - rate-limit: rate limit / 429 — too many requests, rotate key + backoff
  * - network: ECONNREFUSED / ETIMEDOUT — transient, retry same key with backoff
- * - fatal: 401 / 400 — bad key or bad request, do NOT retry
+ * - auth: 401 — credential rejected. Distinct from `fatal` so OAuth callers
+ *   can refresh + retry while pool-key callers can evict the key. withRetry
+ *   itself does NOT auto-retry on `auth`; the consumer wrapping the adapter
+ *   is responsible for refreshing the credential and re-issuing the call.
+ * - fatal: 400 / 403 — bad request or permission denied, do NOT retry
  * - unknown: unrecognized — do NOT retry by default
  */
-type ErrorClass = "quota" | "rate-limit" | "network" | "fatal" | "unknown";
+type ErrorClass = "quota" | "rate-limit" | "network" | "auth" | "fatal" | "unknown";
 interface RetryOptions {
     /** Maximum number of retry attempts after the first failure (default: 3) */
     maxRetries?: number;

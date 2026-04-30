@@ -40,7 +40,10 @@ function shapeError(err) {
 }
 function classifyGeminiError(err) {
   const { lower, status } = shapeError(err);
-  if (status === 401 || status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
+  if (status === 401 || lower.includes("unauthenticated")) {
+    return "auth";
+  }
+  if (status === 400 || status === 403 || lower.includes("api_key_invalid") || lower.includes("permission denied") || lower.includes("suspended") || lower.includes("consumer_suspended") || lower.includes("invalid argument") || lower.includes("invalid_argument")) {
     return "fatal";
   }
   if (status === 429 || lower.includes("429") || lower.includes("resource_exhausted") || lower.includes("quota") || lower.includes("rate_limit") || lower.includes("rate limit") || lower.includes("ratelimitexceeded")) {
@@ -132,6 +135,7 @@ async function withRetry(fn, initialKey, options = {}) {
           await sleep(backoff);
           break;
         }
+        case "auth":
         case "fatal":
         case "unknown":
           throw err;

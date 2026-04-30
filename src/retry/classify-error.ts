@@ -30,8 +30,11 @@ function shapeError(err: unknown): ErrorShape {
 export function classifyGeminiError(err: unknown): ErrorClass {
   const { lower, status } = shapeError(err);
 
+  if (status === 401 || lower.includes("unauthenticated")) {
+    return "auth";
+  }
+
   if (
-    status === 401 ||
     status === 400 ||
     status === 403 ||
     lower.includes("api_key_invalid") ||
@@ -88,8 +91,20 @@ export function classifyGeminiError(err: unknown): ErrorClass {
 export function classifyOpenAIError(err: unknown): ErrorClass {
   const { lower, status } = shapeError(err);
 
+  // 401 is split out from other auth failures so OAuth callers can refresh
+  // the access token and retry, instead of giving up like on a hard fatal.
+  // Token-shaped errors that arrive without an explicit status (e.g. fetch
+  // surfaced as a string body) are also routed here.
   if (
     status === 401 ||
+    lower.includes("token_expired") ||
+    lower.includes("expired_token") ||
+    lower.includes("invalid_token")
+  ) {
+    return "auth";
+  }
+
+  if (
     status === 400 ||
     status === 403 ||
     lower.includes("invalid_api_key") ||
