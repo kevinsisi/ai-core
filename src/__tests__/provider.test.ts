@@ -15,6 +15,7 @@ import {
   unregisterProvider,
 } from "../provider/models.js";
 import { ProviderRouter } from "../provider/router.js";
+import { OpenCodeProviderAdapter } from "../provider/adapters/opencode.js";
 import { OpenAIProviderAdapter } from "../provider/adapters/openai.js";
 import { OpenRouterProviderAdapter } from "../provider/adapters/openrouter.js";
 import type { ProviderAdapter } from "../provider/types.js";
@@ -584,5 +585,71 @@ describe("openrouter provider adapter", () => {
     });
 
     expect(capturedBody?.tools).toEqual([{ type: "web_search" }]);
+  });
+});
+
+describe("opencode provider adapter", () => {
+  it("creates a session with the selected model and sends a prompt to that session", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown>; headers: Record<string, string> }> = [];
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
+      calls.push({ url, headers: init.headers, body: JSON.parse(init.body) as Record<string, unknown> });
+      if (url.endsWith("/session")) {
+        return {
+          ok: true,
+          json: async () => ({ id: "session-1" }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          info: { tokens: { input: 3, output: 5, reasoning: 2 } },
+          parts: [
+            { type: "text", text: "hello" },
+            { type: "text", text: " from opencode" },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "api", provider: "opencode", apiKey: "oc-token", baseURL: "http://localhost:4096/" },
+      { agent: "general", title: "Model test", defaultModel: { providerID: "openai", id: "gpt-5.4-mini" } }
+    );
+
+    const result = await adapter.generateContent({
+      model: "openai/gpt-5.5",
+      systemInstruction: "Be concise",
+      prompt: "hi",
+    });
+
+    expect(calls[0].url).toBe("http://localhost:4096/session");
+    expect(calls[0].headers.Authorization).toBe("Bearer oc-token");
+    expect(calls[0].body).toEqual({
+      title: "Model test",
+      agent: "general",
+      model: { providerID: "openai", id: "gpt-5.5" },
+    });
+    expect(calls[1].url).toBe("http://localhost:4096/session/session-1/message");
+    expect(calls[1].body).toEqual({
+      agent: "general",
+      model: { providerID: "openai", id: "gpt-5.5" },
+      system: "Be concise",
+      parts: [{ type: "text", text: "hi" }],
+    });
+    expect(result).toEqual({
+      text: "hello from opencode",
+      usage: { promptTokens: 3, completionTokens: 7, totalTokens: 10 },
+    });
+  });
+
+  it("uses the default provider when the selected model has no provider prefix", async () => {
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "pool", provider: "opencode" },
+      { defaultModel: { providerID: "openai", id: "gpt-5.4-mini" } }
+    );
+
+    expect(adapter.supports("gpt-5.5-mini")).toBe(true);
+    expect(adapter.getModel("gpt-5.5-mini")?.id).toBe("openai/gpt-5.5-mini");
   });
 });

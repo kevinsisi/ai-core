@@ -2,7 +2,7 @@
 
 ## 專案用途
 
-共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware multi-provider runtime（Gemini / OpenAI / OpenRouter / 自訂 provider）、OpenAI-first routing、Gemini 相容層、per-provider 錯誤分類 retry、`MultiProviderClient` 與 `GeminiClient` 兩條入口，以及 provider-agnostic tool schema。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
+共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware multi-provider runtime（Gemini / OpenAI / OpenRouter / OpenCode session API / 自訂 provider）、OpenAI-first routing、Gemini 相容層、per-provider 錯誤分類 retry、`MultiProviderClient` 與 `GeminiClient` 兩條入口，以及 provider-agnostic tool schema。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
 
 **消費者專案：** mind-diary、project-bridge、auto-spec-test、sheet-to-car
 
@@ -17,7 +17,7 @@ src/
 ├── client/        GeminiClient + MultiProviderClient + provider-agnostic Tool schema/converters
 ├── agent-runtime/ AgentRuntime + active-task / pending-action primitives
 ├── step-orchestration/ StepRunner + preferred-key planning + lease heartbeat
-├── provider/      Provider schema + auth (types + OpenAI OAuth PKCE) + registry + adapters (Gemini / OpenAI / OpenRouter / OpenAI-compatible base) + router
+├── provider/      Provider schema + auth (types + OpenAI OAuth PKCE) + registry + adapters (Gemini / OpenAI / OpenRouter / OpenCode / OpenAI-compatible base) + router
 ├── version.ts     AI_CORE_VERSION
 └── index.ts       統一 re-export
 ```
@@ -124,7 +124,7 @@ const { text } = await client.generateContent({
 | `@kevinsisi/ai-core/client` | GeminiClient, MultiProviderClient, StreamInterruptedError, Tool, FunctionTool, ProviderNativeTool, toGeminiTools, toOpenAITools, ChatMessage, GenerateParams, GenerateResponse |
 | `@kevinsisi/ai-core/agent-runtime` | AgentRuntime, ActiveTask, TaskCheckpoint, PendingAction, InterruptEvent, CompletionCheckResult |
 | `@kevinsisi/ai-core/step-orchestration` | StepRunner, LeaseHeartbeat, planPreferredKeys, StepDefinition, StepExecutionResult |
-| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, registerProvider/unregisterProvider/getProvider/getModel, ProviderRouter (with execute/executeStream), GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterProviderAdapter, startOpenAIAuth, refreshOpenAIToken, OpenAIOAuthError |
+| `@kevinsisi/ai-core/provider` | ProviderID, provider/model schema, defaultProviderPriority, registerProvider/unregisterProvider/getProvider/getModel, ProviderRouter (with execute/executeStream), GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenCodeProviderAdapter, OpenRouterProviderAdapter, startOpenAIAuth, refreshOpenAIToken, OpenAIOAuthError |
 | `@kevinsisi/ai-core/provider/auth` | OAuthCredential, ApiKeyCredential, PoolCredential, ProviderCredential, ProviderAuthType, startOpenAIAuth, refreshOpenAIToken, OpenAIOAuthError, StartOpenAIAuthOptions |
 
 ---

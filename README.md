@@ -4,7 +4,7 @@ HomeProject 共用的 AI 基礎模組，供旗下各服務（mind-diary、projec
 
 ## 一句話描述
 
-Provider-aware multi-provider AI runtime — 整合 OpenAI / OpenRouter / Gemini / 自訂 provider，提供 KeyPool、retry、streaming、tools、agent-runtime 與 step-orchestration 等共用 primitives。
+Provider-aware multi-provider AI runtime — 整合 OpenAI / OpenRouter / Gemini / OpenCode session API / 自訂 provider，提供 KeyPool、retry、streaming、tools、agent-runtime 與 step-orchestration 等共用 primitives。
 
 ## 技術棧
 
@@ -24,7 +24,7 @@ Provider-aware multi-provider AI runtime — 整合 OpenAI / OpenRouter / Gemini
 | `client` | `GeminiClient`（pool-backed）、`MultiProviderClient`（router-backed）、provider-agnostic Tool schema |
 | `agent-runtime` | `AgentRuntime` + active-task / pending-action / interrupt primitives |
 | `step-orchestration` | `StepRunner` + preferred-key planning + lease heartbeat |
-| `provider` | Provider/Model schema、`ProviderRouter`、Gemini / OpenAI / OpenRouter / OpenAI-compatible adapter |
+| `provider` | Provider/Model schema、`ProviderRouter`、Gemini / OpenAI / OpenRouter / OpenCode / OpenAI-compatible adapter |
 
 ### 架構原則
 

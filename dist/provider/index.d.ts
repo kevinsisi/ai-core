@@ -75,6 +75,36 @@ declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
     protected buildHeaders(): Record<string, string>;
 }
 
+interface OpenCodeModelRef {
+    id: string;
+    providerID: string;
+}
+interface OpenCodeAdapterOptions {
+    baseURL?: string;
+    agent?: string;
+    title?: string;
+    defaultModel: OpenCodeModelRef;
+}
+type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
+declare class OpenCodeProviderAdapter implements ProviderAdapter {
+    readonly provider: ProviderDefinition;
+    readonly credential: OpenCodeCredential;
+    private readonly baseURL;
+    private readonly agent;
+    private readonly title;
+    private readonly defaultModel;
+    constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions);
+    supports(modelID: string): boolean;
+    getModel(modelID: string): ModelDefinition | undefined;
+    generateContent(params: GenerateParams): Promise<GenerateResponse>;
+    streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown>;
+    private resolveModel;
+    private buildHeaders;
+    private createSession;
+    private sendMessage;
+    private readJson;
+}
+
 interface OpenRouterAdapterOptions {
     /** Optional list of model definitions to expose beyond the built-in catalog. */
     additionalModels?: ModelDefinition[];
@@ -101,4 +131,4 @@ declare class OpenRouterProviderAdapter extends OpenAICompatibleAdapter {
     protected buildHeaders(): Record<string, string>;
 }
 
-export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, PoolCredential, ProviderAdapter, ProviderDefinition, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider };
+export { ApiKeyCredential, GeminiProviderAdapter, ModelDefinition, OAuthCredential, OpenAICompatibleAdapter, OpenAIProviderAdapter, type OpenCodeAdapterOptions, type OpenCodeModelRef, OpenCodeProviderAdapter, type OpenRouterAdapterOptions, OpenRouterProviderAdapter, PoolCredential, ProviderAdapter, ProviderDefinition, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider };

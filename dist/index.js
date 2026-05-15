@@ -8,8 +8,9 @@ import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-E2PPJDKT.js";
+} from "./chunk-7CNPHYVJ.js";
 import {
   GeminiClient,
   ProviderRouter,
@@ -31,11 +32,11 @@ import {
   LeaseHeartbeat,
   StepRunner,
   planPreferredKeys
-} from "./chunk-FPQQMHFF.js";
+} from "./chunk-P3ARPLKV.js";
 import {
   KeyPool,
   SqliteAdapter
-} from "./chunk-KUFFHZDJ.js";
+} from "./chunk-TQP53VQG.js";
 import "./chunk-U42SY5KL.js";
 import {
   MaxRetriesExceededError,
@@ -75,6 +76,7 @@ export {
   OpenAICompatibleAdapter,
   OpenAIOAuthError,
   OpenAIProviderAdapter,
+  OpenCodeProviderAdapter,
   OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,

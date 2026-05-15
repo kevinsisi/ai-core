@@ -34,6 +34,7 @@ __export(provider_exports, {
   OpenAICompatibleAdapter: () => OpenAICompatibleAdapter,
   OpenAIOAuthError: () => OpenAIOAuthError,
   OpenAIProviderAdapter: () => OpenAIProviderAdapter,
+  OpenCodeProviderAdapter: () => OpenCodeProviderAdapter,
   OpenRouterProviderAdapter: () => OpenRouterProviderAdapter,
   ProviderID: () => ProviderID,
   ProviderRouter: () => ProviderRouter,
@@ -1125,6 +1126,141 @@ var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
   }
 };
 
+// src/provider/adapters/opencode.ts
+function trimTrailingSlash(value) {
+  return value.replace(/\/+$/, "");
+}
+function modelToID(model) {
+  return `${model.providerID}/${model.id}`;
+}
+function parseModelRef(modelID, defaultProviderID) {
+  const separator = modelID.indexOf("/");
+  if (separator > 0 && separator < modelID.length - 1) {
+    return {
+      providerID: modelID.slice(0, separator),
+      id: modelID.slice(separator + 1)
+    };
+  }
+  return { providerID: defaultProviderID, id: modelID };
+}
+function synthesizeModel(model) {
+  return {
+    id: modelToID(model),
+    provider: "opencode",
+    name: modelToID(model),
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: false,
+      multimodalOutput: false
+    }
+  };
+}
+var OpenCodeProviderAdapter = class {
+  provider;
+  credential;
+  baseURL;
+  agent;
+  title;
+  defaultModel;
+  constructor(credential, options) {
+    this.credential = credential;
+    this.defaultModel = options.defaultModel;
+    this.baseURL = trimTrailingSlash(
+      options.baseURL ?? ("baseURL" in credential ? credential.baseURL : void 0) ?? "http://127.0.0.1:4096"
+    );
+    this.agent = options.agent ?? "general";
+    this.title = options.title ?? "ai-core opencode session";
+    this.provider = {
+      id: "opencode",
+      name: "OpenCode",
+      authTypes: ["api", "oauth", "pool"],
+      models: [synthesizeModel(options.defaultModel)]
+    };
+  }
+  supports(modelID) {
+    return Boolean(this.resolveModel(modelID));
+  }
+  getModel(modelID) {
+    const model = this.resolveModel(modelID);
+    return model ? synthesizeModel(model) : void 0;
+  }
+  async generateContent(params) {
+    if (params.images?.length) {
+      throw new Error("OpenCode adapter does not support multimodal input yet");
+    }
+    const model = this.resolveModel(params.model);
+    if (!model) {
+      throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
+    }
+    const session = await this.createSession(model);
+    const message = await this.sendMessage(session.id, params, model);
+    const text = (message.parts ?? []).filter((part) => part.type === "text").map((part) => part.text).join("");
+    const tokens = message.info?.tokens;
+    return {
+      text,
+      usage: tokens ? {
+        promptTokens: tokens.input ?? 0,
+        completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
+        totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0)
+      } : null
+    };
+  }
+  async *streamContent(_params) {
+    throw new Error("OpenCode adapter streaming is not implemented; use generateContent or add SSE support explicitly");
+  }
+  resolveModel(modelID) {
+    const model = parseModelRef(modelID, this.defaultModel.providerID);
+    if (!model.id || !model.providerID) return void 0;
+    return model;
+  }
+  buildHeaders() {
+    const headers = { "Content-Type": "application/json" };
+    if (this.credential.type === "api" && this.credential.apiKey) {
+      headers.Authorization = `Bearer ${this.credential.apiKey}`;
+    }
+    if (this.credential.type === "oauth" && this.credential.accessToken) {
+      headers.Authorization = `Bearer ${this.credential.accessToken}`;
+    }
+    return headers;
+  }
+  async createSession(model) {
+    const response = await fetch(`${this.baseURL}/session`, {
+      method: "POST",
+      headers: this.buildHeaders(),
+      body: JSON.stringify({ title: this.title, agent: this.agent, model })
+    });
+    const json = await this.readJson(response, "OpenCode create session");
+    if (!json.id) {
+      throw new Error("OpenCode create session response did not include session id");
+    }
+    return { id: json.id };
+  }
+  async sendMessage(sessionID, params, model) {
+    const response = await fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}/message`, {
+      method: "POST",
+      headers: this.buildHeaders(),
+      body: JSON.stringify({
+        agent: this.agent,
+        model,
+        ...params.systemInstruction && { system: params.systemInstruction },
+        parts: [{ type: "text", text: params.prompt }]
+      })
+    });
+    return this.readJson(response, "OpenCode send message");
+  }
+  async readJson(response, operation) {
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(text || `${operation} failed with status ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return await response.json();
+  }
+};
+
 // src/provider/adapters/openrouter.ts
 var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
   provider;
@@ -1153,6 +1289,7 @@ var OpenRouterProviderAdapter = class extends OpenAICompatibleAdapter {
   OpenAICompatibleAdapter,
   OpenAIOAuthError,
   OpenAIProviderAdapter,
+  OpenCodeProviderAdapter,
   OpenRouterProviderAdapter,
   ProviderID,
   ProviderRouter,

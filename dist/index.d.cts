@@ -8,7 +8,7 @@ export { ActiveTask, AgentRuntime, AgentRuntimeOptions, CheckpointPriority, Chec
 export { LeaseHeartbeat, PlannedStepAssignment, RunnableStep, StepDefinition, StepExecutionMetadata, StepExecutionResult, StepRunner, StepRunnerOptions, planPreferredKeys } from './step-orchestration/index.cjs';
 export { A as ApiKeyCredential, M as ModelDefinition, a as ModelID, O as OAuthCredential, P as PoolCredential, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, e as ProviderDefinition, f as ProviderID, i as isOAuthCredentialExpired } from './types-DG3Ftj0c.cjs';
 export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './provider/auth/index.cjs';
-export { GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenRouterAdapterOptions, OpenRouterProviderAdapter, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider } from './provider/index.cjs';
+export { GeminiProviderAdapter, OpenAICompatibleAdapter, OpenAIProviderAdapter, OpenCodeAdapterOptions, OpenCodeModelRef, OpenCodeProviderAdapter, OpenRouterAdapterOptions, OpenRouterProviderAdapter, builtInProviders, clearRegisteredProviders, defaultProviderPriority, getBuiltInModel, getBuiltInProvider, getModel, getProvider, listRegisteredProviders, registerProvider, unregisterProvider } from './provider/index.cjs';
 import '@google/generative-ai';
 
 /**

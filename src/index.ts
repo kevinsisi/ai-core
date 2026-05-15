@@ -86,6 +86,7 @@ export {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
+  OpenCodeProviderAdapter,
   OpenRouterProviderAdapter,
   OpenAIOAuthError,
   isOAuthCredentialExpired,
@@ -105,6 +106,8 @@ export type {
   ProviderAdapter,
   RoutePolicy,
   RoutedProviderSelection,
+  OpenCodeAdapterOptions,
+  OpenCodeModelRef,
   OpenRouterAdapterOptions,
   StartOpenAIAuthOptions,
 } from "./provider/index.js";
