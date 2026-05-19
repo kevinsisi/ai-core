@@ -84,6 +84,7 @@ interface OpenCodeAdapterOptions {
     agent?: string;
     title?: string;
     defaultModel: OpenCodeModelRef;
+    basicAuth?: boolean;
 }
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
 declare class OpenCodeProviderAdapter implements ProviderAdapter {
@@ -93,6 +94,7 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     private readonly agent;
     private readonly title;
     private readonly defaultModel;
+    private readonly basicAuth;
     constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
@@ -102,6 +104,7 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     private buildHeaders;
     private createSession;
     private sendMessage;
+    private deleteSession;
     private readJson;
 }
 

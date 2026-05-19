@@ -4,7 +4,7 @@ import {
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "../chunk-7CNPHYVJ.js";
+} from "../chunk-IAUUS2AK.js";
 import {
   ProviderRouter,
   builtInProviders,

@@ -2151,6 +2151,9 @@ var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
 };
 
 // src/provider/adapters/opencode.ts
+function modelToPayload(model) {
+  return { modelID: model.id, providerID: model.providerID };
+}
 function trimTrailingSlash(value) {
   return value.replace(/\/+$/, "");
 }
@@ -2188,6 +2191,7 @@ var OpenCodeProviderAdapter = class {
   agent;
   title;
   defaultModel;
+  basicAuth;
   constructor(credential, options) {
     this.credential = credential;
     this.defaultModel = options.defaultModel;
@@ -2196,6 +2200,7 @@ var OpenCodeProviderAdapter = class {
     );
     this.agent = options.agent ?? "general";
     this.title = options.title ?? "ai-core opencode session";
+    this.basicAuth = options.basicAuth ?? false;
     this.provider = {
       id: "opencode",
       name: "OpenCode",
@@ -2219,17 +2224,21 @@ var OpenCodeProviderAdapter = class {
       throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
     }
     const session = await this.createSession(model);
-    const message = await this.sendMessage(session.id, params, model);
-    const text = (message.parts ?? []).filter((part) => part.type === "text").map((part) => part.text).join("");
-    const tokens = message.info?.tokens;
-    return {
-      text,
-      usage: tokens ? {
-        promptTokens: tokens.input ?? 0,
-        completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
-        totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0)
-      } : null
-    };
+    try {
+      const message = await this.sendMessage(session.id, params, model);
+      const text = (message.parts ?? []).filter((part) => part.type === "text").map((part) => part.text).join("");
+      const tokens = message.info?.tokens;
+      return {
+        text,
+        usage: tokens ? {
+          promptTokens: tokens.input ?? 0,
+          completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
+          totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0)
+        } : null
+      };
+    } finally {
+      this.deleteSession(session.id);
+    }
   }
   async *streamContent(_params) {
     throw new Error("OpenCode adapter streaming is not implemented; use generateContent or add SSE support explicitly");
@@ -2241,10 +2250,12 @@ var OpenCodeProviderAdapter = class {
   }
   buildHeaders() {
     const headers = { "Content-Type": "application/json" };
-    if (this.credential.type === "api" && this.credential.apiKey) {
+    if (this.basicAuth && this.credential.type === "api" && this.credential.apiKey) {
+      const encoded = Buffer.from(`opencode:${this.credential.apiKey}`).toString("base64");
+      headers.Authorization = `Basic ${encoded}`;
+    } else if (this.credential.type === "api" && this.credential.apiKey) {
       headers.Authorization = `Bearer ${this.credential.apiKey}`;
-    }
-    if (this.credential.type === "oauth" && this.credential.accessToken) {
+    } else if (this.credential.type === "oauth" && this.credential.accessToken) {
       headers.Authorization = `Bearer ${this.credential.accessToken}`;
     }
     return headers;
@@ -2253,7 +2264,7 @@ var OpenCodeProviderAdapter = class {
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model })
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) })
     });
     const json = await this.readJson(response, "OpenCode create session");
     if (!json.id) {
@@ -2267,12 +2278,20 @@ var OpenCodeProviderAdapter = class {
       headers: this.buildHeaders(),
       body: JSON.stringify({
         agent: this.agent,
-        model,
+        model: modelToPayload(model),
         ...params.systemInstruction && { system: params.systemInstruction },
         parts: [{ type: "text", text: params.prompt }]
       })
     });
     return this.readJson(response, "OpenCode send message");
+  }
+  deleteSession(sessionID) {
+    fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}`, {
+      method: "DELETE",
+      headers: this.buildHeaders()
+    }).catch((err) => {
+      console.warn(`[opencode] deleteSession ${sessionID} failed:`, err);
+    });
   }
   async readJson(response, operation) {
     if (!response.ok) {
