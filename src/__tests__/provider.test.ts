@@ -628,12 +628,12 @@ describe("opencode provider adapter", () => {
     expect(calls[0].body).toEqual({
       title: "Model test",
       agent: "general",
-      model: { providerID: "openai", id: "gpt-5.5" },
+      model: { providerID: "openai", modelID: "gpt-5.5" },
     });
     expect(calls[1].url).toBe("http://localhost:4096/session/session-1/message");
     expect(calls[1].body).toEqual({
       agent: "general",
-      model: { providerID: "openai", id: "gpt-5.5" },
+      model: { providerID: "openai", modelID: "gpt-5.5" },
       system: "Be concise",
       parts: [{ type: "text", text: "hi" }],
     });
@@ -651,5 +651,57 @@ describe("opencode provider adapter", () => {
 
     expect(adapter.supports("gpt-5.5-mini")).toBe(true);
     expect(adapter.getModel("gpt-5.5-mini")?.id).toBe("openai/gpt-5.5-mini");
+  });
+
+  it("deletes the session after generateContent completes", async () => {
+    const deletedSessions: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
+      if (init.method === "DELETE") {
+        deletedSessions.push(url);
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url.endsWith("/session")) {
+        return { ok: true, json: async () => ({ id: "sess-cleanup" }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          parts: [{ type: "text", text: "done" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "api", provider: "opencode", apiKey: "tok", baseURL: "http://localhost:4096/" },
+      { defaultModel: { providerID: "google", id: "gemini-2.5-flash" } }
+    );
+
+    await adapter.generateContent({ model: "google/gemini-2.5-flash", prompt: "hi" });
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(deletedSessions).toContain("http://localhost:4096/session/sess-cleanup");
+  });
+
+  it("uses Basic auth when basicAuth option is true", async () => {
+    let capturedHeaders: Record<string, string> = {};
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body?: string }) => {
+      capturedHeaders = { ...init.headers };
+      if (url.endsWith("/session")) {
+        return { ok: true, json: async () => ({ id: "s1" }) };
+      }
+      return { ok: true, json: async () => ({ parts: [{ type: "text", text: "ok" }] }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "api", provider: "opencode", apiKey: "secret", baseURL: "http://localhost:4096/" },
+      { defaultModel: { providerID: "google", id: "gemini-2.5-flash" }, basicAuth: true }
+    );
+
+    await adapter.generateContent({ model: "google/gemini-2.5-flash", prompt: "hi" });
+
+    const expected = `Basic ${Buffer.from("opencode:secret").toString("base64")}`;
+    expect(capturedHeaders.Authorization).toBe(expected);
   });
 });

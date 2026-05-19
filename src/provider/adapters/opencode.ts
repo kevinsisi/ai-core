@@ -13,6 +13,7 @@ export interface OpenCodeAdapterOptions {
   agent?: string;
   title?: string;
   defaultModel: OpenCodeModelRef;
+  basicAuth?: boolean;
 }
 
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
@@ -37,6 +38,15 @@ interface OpenCodeAssistantInfo {
 interface OpenCodeMessageResponse {
   info?: OpenCodeAssistantInfo;
   parts?: Array<OpenCodeTextPart | { type: string }>;
+}
+
+interface OpenCodeModelPayload {
+  modelID: string;
+  providerID: string;
+}
+
+function modelToPayload(model: OpenCodeModelRef): OpenCodeModelPayload {
+  return { modelID: model.id, providerID: model.providerID };
 }
 
 function trimTrailingSlash(value: string): string {
@@ -82,6 +92,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
   private readonly agent: string;
   private readonly title: string;
   private readonly defaultModel: OpenCodeModelRef;
+  private readonly basicAuth: boolean;
 
   constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions) {
     this.credential = credential;
@@ -91,6 +102,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     );
     this.agent = options.agent ?? "general";
     this.title = options.title ?? "ai-core opencode session";
+    this.basicAuth = options.basicAuth ?? false;
     this.provider = {
       id: "opencode",
       name: "OpenCode",
@@ -119,23 +131,27 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     }
 
     const session = await this.createSession(model);
-    const message = await this.sendMessage(session.id, params, model);
-    const text = (message.parts ?? [])
-      .filter((part): part is OpenCodeTextPart => part.type === "text")
-      .map((part) => part.text)
-      .join("");
-    const tokens = message.info?.tokens;
+    try {
+      const message = await this.sendMessage(session.id, params, model);
+      const text = (message.parts ?? [])
+        .filter((part): part is OpenCodeTextPart => part.type === "text")
+        .map((part) => part.text)
+        .join("");
+      const tokens = message.info?.tokens;
 
-    return {
-      text,
-      usage: tokens
-        ? {
-            promptTokens: tokens.input ?? 0,
-            completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
-            totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0),
-          }
-        : null,
-    };
+      return {
+        text,
+        usage: tokens
+          ? {
+              promptTokens: tokens.input ?? 0,
+              completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
+              totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0),
+            }
+          : null,
+      };
+    } finally {
+      this.deleteSession(session.id);
+    }
   }
 
   async *streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown> {
@@ -150,10 +166,12 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
 
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (this.credential.type === "api" && this.credential.apiKey) {
+    if (this.basicAuth && this.credential.type === "api" && this.credential.apiKey) {
+      const encoded = Buffer.from(`opencode:${this.credential.apiKey}`).toString("base64");
+      headers.Authorization = `Basic ${encoded}`;
+    } else if (this.credential.type === "api" && this.credential.apiKey) {
       headers.Authorization = `Bearer ${this.credential.apiKey}`;
-    }
-    if (this.credential.type === "oauth" && this.credential.accessToken) {
+    } else if (this.credential.type === "oauth" && this.credential.accessToken) {
       headers.Authorization = `Bearer ${this.credential.accessToken}`;
     }
     return headers;
@@ -163,7 +181,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model }),
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) }),
     });
     const json = await this.readJson<OpenCodeSessionResponse>(response, "OpenCode create session");
     if (!json.id) {
@@ -182,12 +200,21 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
       headers: this.buildHeaders(),
       body: JSON.stringify({
         agent: this.agent,
-        model,
+        model: modelToPayload(model),
         ...(params.systemInstruction && { system: params.systemInstruction }),
         parts: [{ type: "text", text: params.prompt }],
       }),
     });
     return this.readJson<OpenCodeMessageResponse>(response, "OpenCode send message");
+  }
+
+  private deleteSession(sessionID: string): void {
+    fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}`, {
+      method: "DELETE",
+      headers: this.buildHeaders(),
+    }).catch((err: unknown) => {
+      console.warn(`[opencode] deleteSession ${sessionID} failed:`, err);
+    });
   }
 
   private async readJson<T>(response: Response, operation: string): Promise<T> {
