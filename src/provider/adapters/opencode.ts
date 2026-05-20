@@ -1,22 +1,101 @@
-import type { GenerateParams, GenerateResponse } from "../../client/types.js";
+/**
+ * OpenCodeProviderAdapter
+ *
+ * Connects to an OpenCode server (https://opencode.ai) running in server mode.
+ * The server exposes a session-based HTTP API at port 4096. Authentication is
+ * managed by the server itself (OAuth tokens stored in auth.json on the server);
+ * this adapter only needs the server URL and an optional server password.
+ *
+ * ## How the OpenCode session API works
+ *
+ *   POST   /session                          → create session, get { id }
+ *   POST   /session/{id}/message             → send message parts, get response parts
+ *   DELETE /session/{id}                     → clean up (fire-and-forget)
+ *
+ * ## Message parts (input)
+ *
+ *   Text:  { type: "text", text: string }
+ *   Image: { type: "file", mime: string, url: "data:<mime>;base64,<b64>", filename?: string }
+ *
+ * ## Message parts (output)
+ *
+ *   Text responses appear as parts with type === "text" and synthetic !== true.
+ *   Token usage is in the top-level `info.tokens` field.
+ *
+ * ## Model reference format
+ *
+ *   OpenCode models are addressed as "<providerID>/<modelID>", e.g.:
+ *     "opencode/deepseek-v4-flash-free"   — free zen model, no auth needed
+ *     "openai/gpt-5.5"                    — requires OpenAI OAuth on the server
+ *     "openai/gpt-4o"                     — requires OpenAI OAuth on the server
+ *
+ *   Pass these as the `model` field in GenerateParams. The adapter splits on the
+ *   first "/" to get providerID and modelID for the API payload.
+ *
+ * ## Multimodal support
+ *
+ *   Images are supported when the underlying model supports vision (e.g. gpt-5.5,
+ *   gpt-4o). Pass `images` in GenerateParams as InlineImagePart objects. The
+ *   adapter converts them to OpenCode file parts with base64 data URLs.
+ *
+ * ## Conversation history
+ *
+ *   OpenCode sessions maintain history internally. For multi-turn conversations,
+ *   create a persistent session (keep sessionID across calls) and use the
+ *   sessionID-aware constructor option. For single-turn use (default), a new
+ *   session is created per call and deleted after.
+ *
+ * ## Server password
+ *
+ *   If OPENCODE_SERVER_PASSWORD is set on the server, pass it as the `apiKey`
+ *   in an ApiKeyCredential with `basicAuth: true`. Leave credential as a
+ *   PoolCredential with no key for open servers.
+ */
+
+import { readFile } from "node:fs/promises";
+import type { GenerateParams, GenerateResponse, ImagePart } from "../../client/types.js";
 import type { ApiKeyCredential, OAuthCredential, PoolCredential } from "../auth/index.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
 import type { ProviderAdapter } from "../types.js";
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
 export interface OpenCodeModelRef {
-  id: string;
+  /** The downstream provider id, e.g. "opencode", "openai", "google". */
   providerID: string;
+  /** The model id within that provider, e.g. "deepseek-v4-flash-free", "gpt-5.5". */
+  id: string;
 }
 
 export interface OpenCodeAdapterOptions {
+  /**
+   * Base URL of the OpenCode server, e.g. "http://localhost:4096".
+   * Defaults to "http://127.0.0.1:4096".
+   */
   baseURL?: string;
+  /**
+   * OpenCode agent mode. Defaults to "general".
+   * Other values: "build", "code", etc.
+   */
   agent?: string;
+  /** Session title shown in the OpenCode UI. */
   title?: string;
+  /**
+   * Default model used when the caller does not specify a providerID prefix.
+   * e.g. { providerID: "opencode", id: "deepseek-v4-flash-free" }
+   */
   defaultModel: OpenCodeModelRef;
+  /**
+   * Set to true when the server has OPENCODE_SERVER_PASSWORD configured.
+   * When true, sends HTTP Basic Auth using "opencode:<apiKey>".
+   * When false (default), sends Bearer token or no auth.
+   */
   basicAuth?: boolean;
 }
 
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
+
+// ── OpenCode API response shapes ───────────────────────────────────────────
 
 interface OpenCodeSessionResponse {
   id?: string;
@@ -25,7 +104,17 @@ interface OpenCodeSessionResponse {
 interface OpenCodeTextPart {
   type: "text";
   text: string;
+  synthetic?: boolean;
 }
+
+interface OpenCodeFilePart {
+  type: "file";
+  mime: string;
+  url: string;
+  filename?: string;
+}
+
+type OpenCodeInputPart = OpenCodeTextPart | OpenCodeFilePart;
 
 interface OpenCodeAssistantInfo {
   tokens?: {
@@ -37,7 +126,7 @@ interface OpenCodeAssistantInfo {
 
 interface OpenCodeMessageResponse {
   info?: OpenCodeAssistantInfo;
-  parts?: Array<OpenCodeTextPart | { type: string }>;
+  parts?: Array<OpenCodeTextPart | { type: string; synthetic?: boolean }>;
 }
 
 interface OpenCodeModelPayload {
@@ -45,9 +134,7 @@ interface OpenCodeModelPayload {
   providerID: string;
 }
 
-function modelToPayload(model: OpenCodeModelRef): OpenCodeModelPayload {
-  return { modelID: model.id, providerID: model.providerID };
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -57,15 +144,15 @@ function modelToID(model: OpenCodeModelRef): string {
   return `${model.providerID}/${model.id}`;
 }
 
-function parseModelRef(modelID: string, defaultProviderID: string): OpenCodeModelRef {
-  const separator = modelID.indexOf("/");
-  if (separator > 0 && separator < modelID.length - 1) {
-    return {
-      providerID: modelID.slice(0, separator),
-      id: modelID.slice(separator + 1),
-    };
-  }
+function modelToPayload(model: OpenCodeModelRef): OpenCodeModelPayload {
+  return { modelID: model.id, providerID: model.providerID };
+}
 
+function parseModelRef(modelID: string, defaultProviderID: string): OpenCodeModelRef {
+  const sep = modelID.indexOf("/");
+  if (sep > 0 && sep < modelID.length - 1) {
+    return { providerID: modelID.slice(0, sep), id: modelID.slice(sep + 1) };
+  }
   return { providerID: defaultProviderID, id: modelID };
 }
 
@@ -78,11 +165,31 @@ function synthesizeModel(model: OpenCodeModelRef): ModelDefinition {
       streaming: false,
       tools: false,
       reasoning: true,
-      multimodalInput: false,
+      multimodalInput: true,
       multimodalOutput: false,
     },
   };
 }
+
+async function imagePartToOpenCode(image: ImagePart): Promise<OpenCodeFilePart> {
+  if (image.type === "inline") {
+    return {
+      type: "file",
+      mime: image.mimeType,
+      url: `data:${image.mimeType};base64,${image.data}`,
+    };
+  }
+  // type === "file": read from disk and encode
+  const buf = await readFile(image.filePath);
+  return {
+    type: "file",
+    mime: image.mimeType,
+    url: `data:${image.mimeType};base64,${buf.toString("base64")}`,
+    filename: image.filePath.split(/[\\/]/).pop(),
+  };
+}
+
+// ── Adapter ────────────────────────────────────────────────────────────────
 
 export class OpenCodeProviderAdapter implements ProviderAdapter {
   readonly provider: ProviderDefinition;
@@ -98,7 +205,9 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     this.credential = credential;
     this.defaultModel = options.defaultModel;
     this.baseURL = trimTrailingSlash(
-      options.baseURL ?? ("baseURL" in credential ? credential.baseURL : undefined) ?? "http://127.0.0.1:4096"
+      options.baseURL ??
+        ("baseURL" in credential ? credential.baseURL : undefined) ??
+        "http://127.0.0.1:4096",
     );
     this.agent = options.agent ?? "general";
     this.title = options.title ?? "ai-core opencode session";
@@ -121,10 +230,6 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
   }
 
   async generateContent(params: GenerateParams): Promise<GenerateResponse> {
-    if (params.images?.length) {
-      throw new Error("OpenCode adapter does not support multimodal input yet");
-    }
-
     const model = this.resolveModel(params.model);
     if (!model) {
       throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
@@ -133,19 +238,20 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     const session = await this.createSession(model);
     try {
       const message = await this.sendMessage(session.id, params, model);
-      const text = (message.parts ?? [])
-        .filter((part): part is OpenCodeTextPart => part.type === "text")
-        .map((part) => part.text)
-        .join("");
-      const tokens = message.info?.tokens;
 
+      const text = (message.parts ?? [])
+        .filter((p): p is OpenCodeTextPart => p.type === "text" && !p.synthetic)
+        .map((p) => p.text)
+        .join("");
+
+      const t = message.info?.tokens;
       return {
         text,
-        usage: tokens
+        usage: t
           ? {
-              promptTokens: tokens.input ?? 0,
-              completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
-              totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0),
+              promptTokens: t.input ?? 0,
+              completionTokens: (t.output ?? 0) + (t.reasoning ?? 0),
+              totalTokens: (t.input ?? 0) + (t.output ?? 0) + (t.reasoning ?? 0),
             }
           : null,
       };
@@ -155,8 +261,12 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
   }
 
   async *streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown> {
-    throw new Error("OpenCode adapter streaming is not implemented; use generateContent or add SSE support explicitly");
+    throw new Error(
+      "OpenCodeProviderAdapter does not support streaming. Use generateContent instead.",
+    );
   }
+
+  // ── Private helpers ──────────────────────────────────────────────────────
 
   private resolveModel(modelID: string): OpenCodeModelRef | undefined {
     const model = parseModelRef(modelID, this.defaultModel.providerID);
@@ -183,29 +293,40 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
       headers: this.buildHeaders(),
       body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) }),
     });
-    const json = await this.readJson<OpenCodeSessionResponse>(response, "OpenCode create session");
-    if (!json.id) {
-      throw new Error("OpenCode create session response did not include session id");
-    }
+    const json = await this.readJson<OpenCodeSessionResponse>(response, "create session");
+    if (!json.id) throw new Error("OpenCode create session response missing id");
     return { id: json.id };
   }
 
   private async sendMessage(
     sessionID: string,
     params: GenerateParams,
-    model: OpenCodeModelRef
+    model: OpenCodeModelRef,
   ): Promise<OpenCodeMessageResponse> {
-    const response = await fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}/message`, {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: JSON.stringify({
-        agent: this.agent,
-        model: modelToPayload(model),
-        ...(params.systemInstruction && { system: params.systemInstruction }),
-        parts: [{ type: "text", text: params.prompt }],
-      }),
-    });
-    return this.readJson<OpenCodeMessageResponse>(response, "OpenCode send message");
+    const parts: OpenCodeInputPart[] = [];
+
+    // Attach images first (before text, matching web UI convention)
+    if (params.images?.length) {
+      const imageParts = await Promise.all(params.images.map(imagePartToOpenCode));
+      parts.push(...imageParts);
+    }
+
+    parts.push({ type: "text", text: params.prompt });
+
+    const response = await fetch(
+      `${this.baseURL}/session/${encodeURIComponent(sessionID)}/message`,
+      {
+        method: "POST",
+        headers: this.buildHeaders(),
+        body: JSON.stringify({
+          agent: this.agent,
+          model: modelToPayload(model),
+          ...(params.systemInstruction && { system: params.systemInstruction }),
+          parts,
+        }),
+      },
+    );
+    return this.readJson<OpenCodeMessageResponse>(response, "send message");
   }
 
   private deleteSession(sessionID: string): void {
@@ -220,7 +341,9 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
   private async readJson<T>(response: Response, operation: string): Promise<T> {
     if (!response.ok) {
       const text = await response.text();
-      const error = new Error(text || `${operation} failed with status ${response.status}`) as Error & { status?: number };
+      const error = new Error(
+        text || `OpenCode ${operation} failed with HTTP ${response.status}`,
+      ) as Error & { status?: number };
       error.status = response.status;
       throw error;
     }

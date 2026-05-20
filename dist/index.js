@@ -10,7 +10,7 @@ import {
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-IAUUS2AK.js";
+} from "./chunk-G3T2IHKX.js";
 import {
   GeminiClient,
   ProviderRouter,

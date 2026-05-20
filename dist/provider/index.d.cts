@@ -75,15 +75,89 @@ declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
     protected buildHeaders(): Record<string, string>;
 }
 
+/**
+ * OpenCodeProviderAdapter
+ *
+ * Connects to an OpenCode server (https://opencode.ai) running in server mode.
+ * The server exposes a session-based HTTP API at port 4096. Authentication is
+ * managed by the server itself (OAuth tokens stored in auth.json on the server);
+ * this adapter only needs the server URL and an optional server password.
+ *
+ * ## How the OpenCode session API works
+ *
+ *   POST   /session                          → create session, get { id }
+ *   POST   /session/{id}/message             → send message parts, get response parts
+ *   DELETE /session/{id}                     → clean up (fire-and-forget)
+ *
+ * ## Message parts (input)
+ *
+ *   Text:  { type: "text", text: string }
+ *   Image: { type: "file", mime: string, url: "data:<mime>;base64,<b64>", filename?: string }
+ *
+ * ## Message parts (output)
+ *
+ *   Text responses appear as parts with type === "text" and synthetic !== true.
+ *   Token usage is in the top-level `info.tokens` field.
+ *
+ * ## Model reference format
+ *
+ *   OpenCode models are addressed as "<providerID>/<modelID>", e.g.:
+ *     "opencode/deepseek-v4-flash-free"   — free zen model, no auth needed
+ *     "openai/gpt-5.5"                    — requires OpenAI OAuth on the server
+ *     "openai/gpt-4o"                     — requires OpenAI OAuth on the server
+ *
+ *   Pass these as the `model` field in GenerateParams. The adapter splits on the
+ *   first "/" to get providerID and modelID for the API payload.
+ *
+ * ## Multimodal support
+ *
+ *   Images are supported when the underlying model supports vision (e.g. gpt-5.5,
+ *   gpt-4o). Pass `images` in GenerateParams as InlineImagePart objects. The
+ *   adapter converts them to OpenCode file parts with base64 data URLs.
+ *
+ * ## Conversation history
+ *
+ *   OpenCode sessions maintain history internally. For multi-turn conversations,
+ *   create a persistent session (keep sessionID across calls) and use the
+ *   sessionID-aware constructor option. For single-turn use (default), a new
+ *   session is created per call and deleted after.
+ *
+ * ## Server password
+ *
+ *   If OPENCODE_SERVER_PASSWORD is set on the server, pass it as the `apiKey`
+ *   in an ApiKeyCredential with `basicAuth: true`. Leave credential as a
+ *   PoolCredential with no key for open servers.
+ */
+
 interface OpenCodeModelRef {
-    id: string;
+    /** The downstream provider id, e.g. "opencode", "openai", "google". */
     providerID: string;
+    /** The model id within that provider, e.g. "deepseek-v4-flash-free", "gpt-5.5". */
+    id: string;
 }
 interface OpenCodeAdapterOptions {
+    /**
+     * Base URL of the OpenCode server, e.g. "http://localhost:4096".
+     * Defaults to "http://127.0.0.1:4096".
+     */
     baseURL?: string;
+    /**
+     * OpenCode agent mode. Defaults to "general".
+     * Other values: "build", "code", etc.
+     */
     agent?: string;
+    /** Session title shown in the OpenCode UI. */
     title?: string;
+    /**
+     * Default model used when the caller does not specify a providerID prefix.
+     * e.g. { providerID: "opencode", id: "deepseek-v4-flash-free" }
+     */
     defaultModel: OpenCodeModelRef;
+    /**
+     * Set to true when the server has OPENCODE_SERVER_PASSWORD configured.
+     * When true, sends HTTP Basic Auth using "opencode:<apiKey>".
+     * When false (default), sends Bearer token or no auth.
+     */
     basicAuth?: boolean;
 }
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;

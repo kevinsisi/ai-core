@@ -236,22 +236,20 @@ var OpenAIProviderAdapter = class extends OpenAICompatibleAdapter {
 };
 
 // src/provider/adapters/opencode.ts
-function modelToPayload(model) {
-  return { modelID: model.id, providerID: model.providerID };
-}
+import { readFile } from "fs/promises";
 function trimTrailingSlash(value) {
   return value.replace(/\/+$/, "");
 }
 function modelToID(model) {
   return `${model.providerID}/${model.id}`;
 }
+function modelToPayload(model) {
+  return { modelID: model.id, providerID: model.providerID };
+}
 function parseModelRef(modelID, defaultProviderID) {
-  const separator = modelID.indexOf("/");
-  if (separator > 0 && separator < modelID.length - 1) {
-    return {
-      providerID: modelID.slice(0, separator),
-      id: modelID.slice(separator + 1)
-    };
+  const sep = modelID.indexOf("/");
+  if (sep > 0 && sep < modelID.length - 1) {
+    return { providerID: modelID.slice(0, sep), id: modelID.slice(sep + 1) };
   }
   return { providerID: defaultProviderID, id: modelID };
 }
@@ -264,9 +262,25 @@ function synthesizeModel(model) {
       streaming: false,
       tools: false,
       reasoning: true,
-      multimodalInput: false,
+      multimodalInput: true,
       multimodalOutput: false
     }
+  };
+}
+async function imagePartToOpenCode(image) {
+  if (image.type === "inline") {
+    return {
+      type: "file",
+      mime: image.mimeType,
+      url: `data:${image.mimeType};base64,${image.data}`
+    };
+  }
+  const buf = await readFile(image.filePath);
+  return {
+    type: "file",
+    mime: image.mimeType,
+    url: `data:${image.mimeType};base64,${buf.toString("base64")}`,
+    filename: image.filePath.split(/[\\/]/).pop()
   };
 }
 var OpenCodeProviderAdapter = class {
@@ -301,9 +315,6 @@ var OpenCodeProviderAdapter = class {
     return model ? synthesizeModel(model) : void 0;
   }
   async generateContent(params) {
-    if (params.images?.length) {
-      throw new Error("OpenCode adapter does not support multimodal input yet");
-    }
     const model = this.resolveModel(params.model);
     if (!model) {
       throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
@@ -311,14 +322,14 @@ var OpenCodeProviderAdapter = class {
     const session = await this.createSession(model);
     try {
       const message = await this.sendMessage(session.id, params, model);
-      const text = (message.parts ?? []).filter((part) => part.type === "text").map((part) => part.text).join("");
-      const tokens = message.info?.tokens;
+      const text = (message.parts ?? []).filter((p) => p.type === "text" && !p.synthetic).map((p) => p.text).join("");
+      const t = message.info?.tokens;
       return {
         text,
-        usage: tokens ? {
-          promptTokens: tokens.input ?? 0,
-          completionTokens: (tokens.output ?? 0) + (tokens.reasoning ?? 0),
-          totalTokens: (tokens.input ?? 0) + (tokens.output ?? 0) + (tokens.reasoning ?? 0)
+        usage: t ? {
+          promptTokens: t.input ?? 0,
+          completionTokens: (t.output ?? 0) + (t.reasoning ?? 0),
+          totalTokens: (t.input ?? 0) + (t.output ?? 0) + (t.reasoning ?? 0)
         } : null
       };
     } finally {
@@ -326,8 +337,11 @@ var OpenCodeProviderAdapter = class {
     }
   }
   async *streamContent(_params) {
-    throw new Error("OpenCode adapter streaming is not implemented; use generateContent or add SSE support explicitly");
+    throw new Error(
+      "OpenCodeProviderAdapter does not support streaming. Use generateContent instead."
+    );
   }
+  // ── Private helpers ──────────────────────────────────────────────────────
   resolveModel(modelID) {
     const model = parseModelRef(modelID, this.defaultModel.providerID);
     if (!model.id || !model.providerID) return void 0;
@@ -351,24 +365,31 @@ var OpenCodeProviderAdapter = class {
       headers: this.buildHeaders(),
       body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) })
     });
-    const json = await this.readJson(response, "OpenCode create session");
-    if (!json.id) {
-      throw new Error("OpenCode create session response did not include session id");
-    }
+    const json = await this.readJson(response, "create session");
+    if (!json.id) throw new Error("OpenCode create session response missing id");
     return { id: json.id };
   }
   async sendMessage(sessionID, params, model) {
-    const response = await fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}/message`, {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: JSON.stringify({
-        agent: this.agent,
-        model: modelToPayload(model),
-        ...params.systemInstruction && { system: params.systemInstruction },
-        parts: [{ type: "text", text: params.prompt }]
-      })
-    });
-    return this.readJson(response, "OpenCode send message");
+    const parts = [];
+    if (params.images?.length) {
+      const imageParts = await Promise.all(params.images.map(imagePartToOpenCode));
+      parts.push(...imageParts);
+    }
+    parts.push({ type: "text", text: params.prompt });
+    const response = await fetch(
+      `${this.baseURL}/session/${encodeURIComponent(sessionID)}/message`,
+      {
+        method: "POST",
+        headers: this.buildHeaders(),
+        body: JSON.stringify({
+          agent: this.agent,
+          model: modelToPayload(model),
+          ...params.systemInstruction && { system: params.systemInstruction },
+          parts
+        })
+      }
+    );
+    return this.readJson(response, "send message");
   }
   deleteSession(sessionID) {
     fetch(`${this.baseURL}/session/${encodeURIComponent(sessionID)}`, {
@@ -381,7 +402,9 @@ var OpenCodeProviderAdapter = class {
   async readJson(response, operation) {
     if (!response.ok) {
       const text = await response.text();
-      const error = new Error(text || `${operation} failed with status ${response.status}`);
+      const error = new Error(
+        text || `OpenCode ${operation} failed with HTTP ${response.status}`
+      );
       error.status = response.status;
       throw error;
     }
@@ -419,4 +442,4 @@ export {
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-IAUUS2AK.js.map
+//# sourceMappingURL=chunk-G3T2IHKX.js.map
