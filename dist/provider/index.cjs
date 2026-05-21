@@ -315,6 +315,34 @@ var geminiModels = [
     contextWindow: 1e6,
     outputLimit: 65536,
     costTier: "low"
+  },
+  {
+    id: "gemini-3-pro-image-preview",
+    provider: ProviderID.Gemini,
+    name: "Gemini 3 Pro Image Preview",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true
+    },
+    costTier: "high"
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    provider: ProviderID.Gemini,
+    name: "Gemini 2.5 Flash Image",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true
+    },
+    costTier: "medium"
   }
 ];
 var openAIModels = [
@@ -434,6 +462,35 @@ function listRegisteredProviders() {
   return [...builtInProviders, ...customProviders.values()];
 }
 
+// src/client/types.ts
+var StreamInterruptedError = class extends Error {
+  chunksReceived;
+  constructor(chunksReceived, cause) {
+    const inner = cause instanceof Error ? cause.message : String(cause ?? "unknown");
+    super(
+      `Stream interrupted after ${chunksReceived} chunk(s): ${inner}`
+    );
+    this.name = "StreamInterruptedError";
+    this.chunksReceived = chunksReceived;
+  }
+};
+var CapabilityNotSupportedError = class extends Error {
+  constructor(provider, capability) {
+    super(`${provider} does not support capability ${capability}`);
+    this.name = "CapabilityNotSupportedError";
+  }
+};
+var MaxToolRoundsExceededError = class extends Error {
+  constructor(roundsCompleted, cap) {
+    super(`Tool-call loop exceeded ${cap} rounds (completed ${roundsCompleted})`);
+    this.roundsCompleted = roundsCompleted;
+    this.cap = cap;
+    this.name = "MaxToolRoundsExceededError";
+  }
+  roundsCompleted;
+  cap;
+};
+
 // src/provider/router.ts
 function credentialRef(adapter) {
   const label = adapter.credential.credentialLabel;
@@ -453,6 +510,11 @@ function matchesCapabilities(model, required) {
     if (typeof value !== "boolean") return true;
     return model.capabilities[key] === value;
   });
+}
+function supportsRequiredMethod(adapter, method) {
+  if (!method) return true;
+  const fn = adapter[method];
+  return typeof fn === "function";
 }
 var ProviderRouter = class {
   constructor(adapters) {
@@ -507,6 +569,47 @@ var ProviderRouter = class {
     const stream = adapter.streamContent({ ...params, model: selection.model });
     return { selection, stream };
   }
+  executeChatWithTools(params, ctx, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { tools: true, ...policy.requiredCapabilities ?? {} },
+      requiredMethod: "chatWithTools"
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    if (!adapter.chatWithTools) {
+      throw new CapabilityNotSupportedError(selection.provider, "chatWithTools");
+    }
+    const stream = adapter.chatWithTools({ ...params, model: selection.model }, ctx);
+    return { selection, stream };
+  }
+  async executeImageGen(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { imageOutput: true, ...policy.requiredCapabilities ?? {} },
+      requiredMethod: "imageGen"
+    };
+    const candidates = this.selectAdapterCandidates(effectivePolicy);
+    let lastError;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const { adapter, selection } = candidates[index];
+      if (!adapter.imageGen) {
+        lastError = new CapabilityNotSupportedError(selection.provider, "imageGen");
+        continue;
+      }
+      try {
+        const response = await adapter.imageGen({ ...params, model: selection.model });
+        return { selection, response };
+      } catch (err) {
+        lastError = err;
+        if (!this.canTryNextCandidate(candidates, index, effectivePolicy)) {
+          throw err;
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new CapabilityNotSupportedError("provider", "imageGen");
+  }
   selectAdapter(policy) {
     const [candidate] = this.selectAdapterCandidates(policy);
     if (!candidate) {
@@ -531,7 +634,7 @@ var ProviderRouter = class {
       if (preferredBuiltInModel && preferredBuiltInModel.provider !== providerID && !policy.allowCrossProviderFallback) {
         continue;
       }
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID).filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       if (providerAdapters.length === 0) continue;
       const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
       for (const adapter of adaptersToTry) {
@@ -590,7 +693,7 @@ var ProviderRouter = class {
     for (const providerID of orderedProviders) {
       const providerChanged = providerID !== selectedProviderID;
       if (providerChanged && !policy.allowCrossProviderFallback) continue;
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID).filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
       for (const adapter of adaptersToTry) {
         if (adapter === selectedAdapter) continue;
@@ -636,6 +739,10 @@ var ProviderRouter = class {
     return policy.allowSameProviderCredentialFallback === true;
   }
 };
+
+// src/provider/adapters/gemini.ts
+var import_node_crypto = require("crypto");
+var import_generative_ai2 = require("@google/generative-ai");
 
 // src/client/gemini-client.ts
 var import_node_fs = require("fs");
@@ -796,19 +903,6 @@ function toOpenAITools(tools, nativeToolProvider = "openai") {
   }
   return result.length > 0 ? result : void 0;
 }
-
-// src/client/types.ts
-var StreamInterruptedError = class extends Error {
-  chunksReceived;
-  constructor(chunksReceived, cause) {
-    const inner = cause instanceof Error ? cause.message : String(cause ?? "unknown");
-    super(
-      `Stream interrupted after ${chunksReceived} chunk(s): ${inner}`
-    );
-    this.name = "StreamInterruptedError";
-    this.chunksReceived = chunksReceived;
-  }
-};
 
 // src/client/gemini-client.ts
 function extractUsage(response) {
@@ -1043,13 +1137,202 @@ function synthesizeGeminiModel(modelID) {
     }
   };
 }
+function isModelNotFoundError(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("not found") || lower.includes("404") || lower.includes("not supported") || lower.includes("invalid model") || lower.includes("model") && lower.includes("does not exist");
+}
+function extractUsageFromResponse(response) {
+  const meta = response.usageMetadata;
+  if (!meta) return null;
+  return {
+    promptTokens: meta.promptTokenCount ?? 0,
+    completionTokens: meta.candidatesTokenCount ?? 0,
+    totalTokens: meta.totalTokenCount ?? 0
+  };
+}
+async function callGeminiImageGen(apiKey, modelID, params) {
+  const genai = new import_generative_ai2.GoogleGenerativeAI(apiKey);
+  const model = genai.getGenerativeModel({ model: modelID });
+  const parts = [];
+  for (const image of params.referenceImages ?? []) {
+    if (image.type === "inline") {
+      parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+    } else {
+      throw new Error(
+        "GeminiProviderAdapter.imageGen: FileImagePart not yet supported; pass InlineImagePart with base64 data instead"
+      );
+    }
+  }
+  parts.push({ text: params.prompt });
+  const resp = await model.generateContent({
+    contents: [{ role: "user", parts }],
+    generationConfig: { responseModalities: ["IMAGE", "TEXT"] }
+  });
+  const respParts = resp.response.candidates?.[0]?.content?.parts ?? [];
+  const images = respParts.filter(
+    (p) => Boolean(p.inlineData?.data && p.inlineData.mimeType)
+  ).map((p) => ({ mimeType: p.inlineData.mimeType, data: p.inlineData.data }));
+  if (images.length === 0) {
+    throw new Error("Gemini image generation returned no image part");
+  }
+  const text = respParts.filter((p) => typeof p.text === "string").map((p) => p.text).join("");
+  return {
+    images,
+    text: text || void 0,
+    usage: extractUsageFromResponse(resp.response)
+  };
+}
+async function runGeminiChatLoop(apiKey, params, ctx, push, maxRounds) {
+  const genai = new import_generative_ai2.GoogleGenerativeAI(apiKey);
+  const tools = toGeminiTools(params.tools);
+  const model = genai.getGenerativeModel({
+    model: params.model,
+    ...params.systemInstruction && { systemInstruction: params.systemInstruction },
+    ...tools && { tools }
+  });
+  const history = (params.history ?? []).map((msg) => ({
+    role: msg.role,
+    parts: [{ text: msg.parts }]
+  }));
+  const chat = model.startChat({ history });
+  const initialParts = params.images?.length ? buildParts(params.prompt, params.images) : [{ text: params.prompt }];
+  let fullText = "";
+  let result = await chat.sendMessageStream(initialParts);
+  let round = 0;
+  while (true) {
+    let sawToolCall = false;
+    const functionResponses = [];
+    for await (const chunk of result.stream) {
+      const calls = chunk.functionCalls();
+      if (calls && calls.length > 0) {
+        sawToolCall = true;
+        for (const fc of calls) {
+          const id = (0, import_node_crypto.randomUUID)();
+          const args = fc.args ?? {};
+          push({ type: "tool_call", id, name: fc.name, args });
+          const toolResult = ctx.onToolCall ? await ctx.onToolCall({ id, name: fc.name, args }) : "";
+          functionResponses.push({
+            functionResponse: { name: fc.name, response: { result: toolResult } }
+          });
+        }
+      } else {
+        const text = chunk.text();
+        if (text) {
+          fullText += text;
+          push({ type: "text_delta", delta: text });
+        }
+      }
+    }
+    if (sawToolCall && functionResponses.length > 0) {
+      round += 1;
+      if (round >= maxRounds) {
+        throw new MaxToolRoundsExceededError(round, maxRounds);
+      }
+      result = await chat.sendMessageStream(functionResponses);
+      continue;
+    }
+    if (!fullText) {
+      try {
+        const fb = (await result.response).text();
+        if (fb) {
+          fullText = fb;
+          push({ type: "text_delta", delta: fb });
+        }
+      } catch {
+      }
+    }
+    break;
+  }
+  const response = await result.response;
+  const usage = extractUsageFromResponse(response);
+  if (usage) push({ type: "usage", usage });
+  push({ type: "done", fullText });
+}
+async function* runGeminiChatWithTools(pool, maxRetries, params, ctx) {
+  const queue = [];
+  let resolveNext = null;
+  let runError = null;
+  let runDone = false;
+  const push = (ev) => {
+    queue.push(ev);
+    if (resolveNext) {
+      const r = resolveNext;
+      resolveNext = null;
+      r();
+    }
+  };
+  const maxRounds = ctx.maxToolRounds ?? 5;
+  const driver = (async () => {
+    const [initialKey] = await pool.allocate(1);
+    let currentKey = initialKey;
+    let failed = false;
+    let authFailure = false;
+    try {
+      await withRetry(
+        async (apiKey) => {
+          currentKey = apiKey;
+          await runGeminiChatLoop(apiKey, params, ctx, push, maxRounds);
+        },
+        initialKey,
+        {
+          maxRetries,
+          rotateKey: async () => {
+            await pool.release(currentKey, true, authFailure);
+            const [nextKey] = await pool.allocate(1);
+            return nextKey;
+          },
+          onRetry: (info) => {
+            if (info.errorClass === "fatal") authFailure = true;
+          }
+        }
+      );
+    } catch (err) {
+      failed = true;
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("fatal") || message.includes("401") || message.includes("403")) {
+        authFailure = true;
+      }
+      throw err;
+    } finally {
+      await pool.release(currentKey, failed, authFailure).catch(() => {
+      });
+    }
+  })();
+  driver.catch((err) => {
+    runError = err;
+  }).finally(() => {
+    runDone = true;
+    if (resolveNext) {
+      const r = resolveNext;
+      resolveNext = null;
+      r();
+    }
+  });
+  while (true) {
+    if (queue.length > 0) {
+      yield queue.shift();
+      continue;
+    }
+    if (runDone) {
+      if (runError) throw runError;
+      return;
+    }
+    await new Promise((r) => {
+      resolveNext = r;
+    });
+  }
+}
 var GeminiProviderAdapter = class {
   provider = getBuiltInProvider("gemini");
   credential;
   client;
+  pool;
+  maxRetries;
   constructor(pool, maxRetries = 3) {
     this.credential = { type: "pool", provider: "gemini", credentialLabel: "gemini-pool" };
     this.client = new GeminiClient(pool, { maxRetries });
+    this.pool = pool;
+    this.maxRetries = maxRetries;
   }
   supports(modelID) {
     if (this.provider.models.some((model) => model.id === modelID)) return true;
@@ -1066,6 +1349,90 @@ var GeminiProviderAdapter = class {
   }
   streamContent(params) {
     return this.client.streamContent(params);
+  }
+  /**
+   * Streaming chat with native Gemini function-calling. Loop runs inside
+   * the adapter: the model stream is consumed, `functionCalls()` are turned
+   * into ChatEvents and dispatched to `ctx.onToolCall`, results are pushed
+   * back as `FunctionResponsePart`, and streaming continues. Caps at
+   * `ctx.maxToolRounds ?? 5` rounds; throws `MaxToolRoundsExceededError`
+   * if the model keeps invoking tools past the cap.
+   *
+   * Preserves the v2.22.x "empty chunk after function call" SDK quirk:
+   * when the post-tool-call stream produces no text chunks, the aggregated
+   * `result.response.text()` is emitted as a single `text_delta`.
+   */
+  chatWithTools(params, ctx) {
+    return runGeminiChatWithTools(this.pool, this.maxRetries, params, ctx);
+  }
+  /**
+   * Image generation via Gemini's `responseModalities: ['IMAGE', 'TEXT']`
+   * mode. Two model attempts max (`params.model` then `options.fallbackModel`)
+   * — only the model-not-found-class error triggers the fallback; other
+   * errors propagate immediately.
+   *
+   * `options.dedicatedKey` bypasses the pool entirely: a one-off
+   * `GoogleGenerativeAI` client is constructed, no retry beyond the
+   * fallback-model attempt, and the pool is left untouched. Used by
+   * sheet-to-car's plate-redaction "paid key" pattern.
+   */
+  async imageGen(params) {
+    const options = params.options ?? {};
+    const candidateModels = [params.model];
+    if (options.fallbackModel) candidateModels.push(options.fallbackModel);
+    let lastError;
+    for (let i = 0; i < candidateModels.length; i++) {
+      const modelID = candidateModels[i];
+      const isLast = i === candidateModels.length - 1;
+      try {
+        if (options.dedicatedKey) {
+          return await callGeminiImageGen(options.dedicatedKey, modelID, params);
+        }
+        return await this.executeWithPool(modelID, params);
+      } catch (err) {
+        lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!isLast && isModelNotFoundError(msg)) continue;
+        throw err;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Gemini image generation: all candidate models failed");
+  }
+  async executeWithPool(modelID, params) {
+    const [initialKey] = await this.pool.allocate(1);
+    let currentKey = initialKey;
+    let failed = false;
+    let authFailure = false;
+    try {
+      return await withRetry(
+        async (apiKey) => {
+          currentKey = apiKey;
+          return callGeminiImageGen(apiKey, modelID, params);
+        },
+        initialKey,
+        {
+          maxRetries: this.maxRetries,
+          rotateKey: async () => {
+            await this.pool.release(currentKey, true, authFailure);
+            const [nextKey] = await this.pool.allocate(1);
+            return nextKey;
+          },
+          onRetry: (info) => {
+            if (info.errorClass === "fatal") authFailure = true;
+          }
+        }
+      );
+    } catch (err) {
+      failed = true;
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("fatal") || message.includes("401") || message.includes("403")) {
+        authFailure = true;
+      }
+      throw err;
+    } finally {
+      await this.pool.release(currentKey, failed, authFailure).catch(() => {
+      });
+    }
   }
 };
 
@@ -1340,6 +1707,35 @@ function extractToolCallsFromText(text) {
   if (!matched) return { text };
   return { text: stripped, ...toolCalls.length > 0 && { toolCalls } };
 }
+function isFunctionTool(tool) {
+  return tool.type === "function";
+}
+function buildOpenCodeToolBlock(tools) {
+  const functions = (tools ?? []).filter(isFunctionTool);
+  if (functions.length === 0) return "";
+  const lines = [
+    "You have access to the following tools. To call a tool, embed this exact block in your response:",
+    "",
+    '<tool_call>{"name":"TOOL_NAME","args":{...}}</tool_call>',
+    "",
+    "Only call one tool at a time. After seeing the tool result, continue your response.",
+    "",
+    "Available tools:"
+  ];
+  for (const tool of functions) {
+    const params = tool.parameters ?? {};
+    const required = params.required ?? [];
+    const propLines = Object.entries(params.properties ?? {}).map(
+      ([k, v]) => `    - ${k}${required.includes(k) ? " (required)" : ""}: ${v?.description ?? ""}`
+    ).join("\n");
+    lines.push(`
+- ${tool.name}: ${tool.description ?? ""}${propLines ? "\n" + propLines : ""}`);
+  }
+  return lines.join("\n");
+}
+function serializeHistory(history) {
+  return history.map((msg) => `${msg.role === "model" ? "Assistant" : "User"}: ${msg.parts}`).join("\n\n");
+}
 async function imagePartToOpenCode(image) {
   if (image.type === "inline") {
     return {
@@ -1415,6 +1811,79 @@ var OpenCodeProviderAdapter = class {
     throw new Error(
       "OpenCodeProviderAdapter does not support streaming. Use generateContent instead."
     );
+  }
+  /**
+   * Streaming chat with tool-use orchestration. OpenCode's session API is
+   * one-shot request/response, so streaming here means: each round's full
+   * assistant text is emitted as a single `text_delta` event, then a
+   * `done` event closes the iterable.
+   *
+   * Function calling is implemented through the prompt: a tool description
+   * block is appended to the system prompt, and the model is instructed to
+   * emit `<tool_call>{...}</tool_call>` blocks. Each round, the adapter
+   * extracts those, dispatches via `ctx.onToolCall`, appends the result
+   * to the conversation, and sends the next message.
+   */
+  async *chatWithTools(params, ctx) {
+    const model = this.resolveModel(params.model);
+    if (!model) {
+      throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
+    }
+    const maxRounds = ctx.maxToolRounds ?? 5;
+    const toolBlock = buildOpenCodeToolBlock(params.tools);
+    const systemInstruction = toolBlock ? `${params.systemInstruction ?? ""}
+
+---
+${toolBlock}` : params.systemInstruction;
+    const transcript = serializeHistory(params.history ?? []);
+    let conversation = transcript ? `${transcript}
+
+User: ${params.prompt}` : `User: ${params.prompt}`;
+    const session = await this.createSession(model);
+    let aggregated = "";
+    try {
+      for (let round = 0; round < maxRounds; round += 1) {
+        const isFirst = round === 0;
+        const callParams = {
+          ...params,
+          prompt: isFirst ? conversation : conversation + "\n\nAssistant:",
+          systemInstruction,
+          // Images only on the first round (subsequent rounds replay text only).
+          ...isFirst ? {} : { images: void 0 }
+        };
+        const message = await this.sendMessage(session.id, callParams, model);
+        const rawText = (message.parts ?? []).filter((p) => p.type === "text" && !p.synthetic).map((p) => p.text).join("");
+        const { text, toolCalls } = extractToolCallsFromText(rawText);
+        if (text) {
+          aggregated += text;
+          yield { type: "text_delta", delta: text };
+        }
+        if (!toolCalls || toolCalls.length === 0) {
+          const usage = message.info?.tokens ? {
+            promptTokens: message.info.tokens.input ?? 0,
+            completionTokens: (message.info.tokens.output ?? 0) + (message.info.tokens.reasoning ?? 0),
+            totalTokens: (message.info.tokens.input ?? 0) + (message.info.tokens.output ?? 0) + (message.info.tokens.reasoning ?? 0)
+          } : null;
+          if (usage) yield { type: "usage", usage };
+          yield { type: "done", fullText: aggregated };
+          return;
+        }
+        const toolResults = [];
+        for (const call of toolCalls) {
+          yield { type: "tool_call", id: call.id, name: call.name, args: call.args };
+          const result = ctx.onToolCall ? await ctx.onToolCall(call) : "";
+          toolResults.push(`[Tool "${call.name}" result]: ${result}`);
+        }
+        const assistantTurn = text ? text : "(calling tool)";
+        conversation = `${conversation}
+
+Assistant: ${assistantTurn}
+${toolResults.join("\n")}`;
+      }
+      throw new MaxToolRoundsExceededError(maxRounds, maxRounds);
+    } finally {
+      this.deleteSession(session.id);
+    }
   }
   // ── Private helpers ──────────────────────────────────────────────────────
   resolveModel(modelID) {

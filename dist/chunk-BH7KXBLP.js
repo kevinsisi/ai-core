@@ -1,6 +1,6 @@
 import {
   ProviderID
-} from "./chunk-LMNJWRO5.js";
+} from "./chunk-GSINE2EE.js";
 
 // src/provider/auth/types.ts
 function isOAuthCredentialExpired(credential, leewayMs = 6e4) {
@@ -245,4 +245,4 @@ export {
   refreshOpenAIToken,
   OpenAIOAuthError
 };
-//# sourceMappingURL=chunk-YQWCSAAW.js.map
+//# sourceMappingURL=chunk-BH7KXBLP.js.map

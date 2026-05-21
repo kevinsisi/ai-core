@@ -17,6 +17,7 @@ interface ProviderCapabilities {
     reasoning: boolean;
     multimodalInput: boolean;
     multimodalOutput: boolean;
+    imageOutput?: boolean;
 }
 interface ModelDefinition {
     id: ModelID;

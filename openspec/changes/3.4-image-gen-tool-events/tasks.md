@@ -51,11 +51,11 @@
 
 ## T4 — Release plumbing
 
-- [ ] 4.1 Bump `package.json` version `3.3.x` → `3.4.0`.
-- [ ] 4.2 Update `src/version.ts` `AI_CORE_VERSION` constant.
-- [ ] 4.3 Update `README.md`: usage sections for `toolCalls` field, `imageGen`, `chatWithTools`. Document `options.fallbackModel` / `options.dedicatedKey` for Gemini imageGen. Document `maxToolRounds` default and override.
-- [ ] 4.4 Run full vitest suite — all green.
-- [ ] 4.5 `npm run build` (tsup) — produce dist for all `exports` paths.
+- [x] 4.1 Bump `package.json` version `3.3.x` → `3.4.0`.
+- [x] 4.2 Update `src/version.ts` `AI_CORE_VERSION` constant.
+- [x] 4.3 Update `README.md`: usage sections for `toolCalls` field, `imageGen`, `chatWithTools`. Document `options.fallbackModel` / `options.dedicatedKey` for Gemini imageGen. Document `maxToolRounds` default and override.
+- [x] 4.4 Run full vitest suite — all green (148 tests).
+- [x] 4.5 `npm run build` (tsup) — produce dist for all `exports` paths.
 - [ ] 4.6 T4 commit `chore: bump v3.4.0 + README updates (T4/3)`.
 - [ ] 4.7 Open PR `feat/3.4-image-gen-tool-events` → `main`, wait for Kevin review.
 - [ ] 4.8 After merge: tag `v3.4.0`, publish to GitHub Packages npm registry (`npm publish`).

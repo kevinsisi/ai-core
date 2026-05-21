@@ -20,7 +20,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/client/index.ts
 var client_exports = {};
 __export(client_exports, {
+  CapabilityNotSupportedError: () => CapabilityNotSupportedError,
   GeminiClient: () => GeminiClient,
+  MaxToolRoundsExceededError: () => MaxToolRoundsExceededError,
   MultiProviderClient: () => MultiProviderClient,
   StreamInterruptedError: () => StreamInterruptedError,
   toGeminiTools: () => toGeminiTools,
@@ -199,6 +201,22 @@ var StreamInterruptedError = class extends Error {
     this.name = "StreamInterruptedError";
     this.chunksReceived = chunksReceived;
   }
+};
+var CapabilityNotSupportedError = class extends Error {
+  constructor(provider, capability) {
+    super(`${provider} does not support capability ${capability}`);
+    this.name = "CapabilityNotSupportedError";
+  }
+};
+var MaxToolRoundsExceededError = class extends Error {
+  constructor(roundsCompleted, cap) {
+    super(`Tool-call loop exceeded ${cap} rounds (completed ${roundsCompleted})`);
+    this.roundsCompleted = roundsCompleted;
+    this.cap = cap;
+    this.name = "MaxToolRoundsExceededError";
+  }
+  roundsCompleted;
+  cap;
 };
 
 // src/client/gemini-client.ts
@@ -440,6 +458,34 @@ var geminiModels = [
     contextWindow: 1e6,
     outputLimit: 65536,
     costTier: "low"
+  },
+  {
+    id: "gemini-3-pro-image-preview",
+    provider: ProviderID.Gemini,
+    name: "Gemini 3 Pro Image Preview",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true
+    },
+    costTier: "high"
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    provider: ProviderID.Gemini,
+    name: "Gemini 2.5 Flash Image",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true
+    },
+    costTier: "medium"
   }
 ];
 var openAIModels = [
@@ -546,6 +592,11 @@ function matchesCapabilities(model, required) {
     return model.capabilities[key] === value;
   });
 }
+function supportsRequiredMethod(adapter, method) {
+  if (!method) return true;
+  const fn = adapter[method];
+  return typeof fn === "function";
+}
 var ProviderRouter = class {
   constructor(adapters) {
     this.adapters = adapters;
@@ -599,6 +650,47 @@ var ProviderRouter = class {
     const stream = adapter.streamContent({ ...params, model: selection.model });
     return { selection, stream };
   }
+  executeChatWithTools(params, ctx, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { tools: true, ...policy.requiredCapabilities ?? {} },
+      requiredMethod: "chatWithTools"
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    if (!adapter.chatWithTools) {
+      throw new CapabilityNotSupportedError(selection.provider, "chatWithTools");
+    }
+    const stream = adapter.chatWithTools({ ...params, model: selection.model }, ctx);
+    return { selection, stream };
+  }
+  async executeImageGen(params, policy = {}) {
+    const effectivePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { imageOutput: true, ...policy.requiredCapabilities ?? {} },
+      requiredMethod: "imageGen"
+    };
+    const candidates = this.selectAdapterCandidates(effectivePolicy);
+    let lastError;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const { adapter, selection } = candidates[index];
+      if (!adapter.imageGen) {
+        lastError = new CapabilityNotSupportedError(selection.provider, "imageGen");
+        continue;
+      }
+      try {
+        const response = await adapter.imageGen({ ...params, model: selection.model });
+        return { selection, response };
+      } catch (err) {
+        lastError = err;
+        if (!this.canTryNextCandidate(candidates, index, effectivePolicy)) {
+          throw err;
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new CapabilityNotSupportedError("provider", "imageGen");
+  }
   selectAdapter(policy) {
     const [candidate] = this.selectAdapterCandidates(policy);
     if (!candidate) {
@@ -623,7 +715,7 @@ var ProviderRouter = class {
       if (preferredBuiltInModel && preferredBuiltInModel.provider !== providerID && !policy.allowCrossProviderFallback) {
         continue;
       }
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID).filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       if (providerAdapters.length === 0) continue;
       const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
       for (const adapter of adaptersToTry) {
@@ -682,7 +774,7 @@ var ProviderRouter = class {
     for (const providerID of orderedProviders) {
       const providerChanged = providerID !== selectedProviderID;
       if (providerChanged && !policy.allowCrossProviderFallback) continue;
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID).filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
       for (const adapter of adaptersToTry) {
         if (adapter === selectedAdapter) continue;
@@ -769,13 +861,56 @@ var MultiProviderClient = class {
   streamWithSelection(params, policy) {
     return this.router.executeStream(params, this.mergePolicy(policy));
   }
+  /**
+   * Image generation. Routed to the first chain provider whose adapter
+   * implements `imageGen`; throws `CapabilityNotSupportedError` when no
+   * candidate supports it.
+   *
+   * The provider-specific options bag (`params.options`) is passed through
+   * verbatim — Gemini honors `{ fallbackModel, dedicatedKey }`; other
+   * adapters ignore.
+   */
+  async imageGen(params, policy) {
+    const { selection, response } = await this.router.executeImageGen(
+      params,
+      this.mergePolicy(policy)
+    );
+    this.onSelect?.(selection, { model: params.model, prompt: params.prompt });
+    return response;
+  }
+  imageGenWithSelection(params, policy) {
+    return this.router.executeImageGen(params, this.mergePolicy(policy));
+  }
+  /**
+   * Streaming chat with provider-specific function-call loop. Provider is
+   * selected once at the start of the call; mid-loop provider fallback is
+   * not supported (chat state lives inside the adapter's session).
+   *
+   * Caller supplies `ctx.onToolCall` to execute tools the model invokes;
+   * the adapter feeds results back into the next round. The loop is capped
+   * by `ctx.maxToolRounds` (default 5).
+   */
+  async *chatWithTools(params, ctx, policy) {
+    const { selection, stream } = this.router.executeChatWithTools(
+      params,
+      ctx,
+      this.mergePolicy(policy)
+    );
+    this.onSelect?.(selection, params);
+    yield* stream;
+  }
+  chatWithToolsAndSelection(params, ctx, policy) {
+    return this.router.executeChatWithTools(params, ctx, this.mergePolicy(policy));
+  }
   getRouter() {
     return this.router;
   }
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  CapabilityNotSupportedError,
   GeminiClient,
+  MaxToolRoundsExceededError,
   MultiProviderClient,
   StreamInterruptedError,
   toGeminiTools,
