@@ -1,6 +1,6 @@
 import {
   ProviderRouter
-} from "./chunk-YHN7UO6G.js";
+} from "./chunk-KQDBTSFE.js";
 
 // src/client/multi-provider-client.ts
 var MultiProviderClient = class {
@@ -50,4 +50,4 @@ var MultiProviderClient = class {
 export {
   MultiProviderClient
 };
-//# sourceMappingURL=chunk-DICXPDKM.js.map
+//# sourceMappingURL=chunk-FAVQSTJS.js.map

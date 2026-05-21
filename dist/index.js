@@ -3,14 +3,14 @@ import {
 } from "./chunk-4KJMSVMU.js";
 import {
   MultiProviderClient
-} from "./chunk-DICXPDKM.js";
+} from "./chunk-FAVQSTJS.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-APK7GCMC.js";
+} from "./chunk-CODYFNUT.js";
 import {
   GeminiClient,
   ProviderRouter,
@@ -27,7 +27,7 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-YHN7UO6G.js";
+} from "./chunk-KQDBTSFE.js";
 import {
   LeaseHeartbeat,
   StepRunner,

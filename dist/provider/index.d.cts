@@ -1,8 +1,8 @@
 import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-6qrHJZyy.cjs';
 export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-6qrHJZyy.cjs';
 export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './auth/index.cjs';
-import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-j7vFW12w.cjs';
-export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-j7vFW12w.cjs';
+import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-Aub3wEeL.cjs';
+export { d as ProviderRouter, R as RoutePolicy, h as RoutedExecution, e as RoutedProviderSelection, i as RoutedStream } from '../router-Aub3wEeL.cjs';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.cjs';
 
 declare const builtInProviders: ProviderDefinition[];

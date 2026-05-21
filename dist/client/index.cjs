@@ -217,6 +217,21 @@ function buildHistory(history) {
     parts: [{ text: msg.parts }]
   }));
 }
+function extractToolCalls(response) {
+  const calls = [];
+  for (const candidate of response.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      const call = part.functionCall;
+      if (!call?.name) continue;
+      calls.push({
+        id: `gemini-call-${calls.length + 1}`,
+        name: call.name,
+        args: call.args ? { ...call.args } : {}
+      });
+    }
+  }
+  return calls.length > 0 ? calls : void 0;
+}
 function buildParts(prompt, images) {
   const parts = [{ text: prompt }];
   for (const image of images ?? []) {
@@ -330,7 +345,8 @@ var GeminiClient = class {
       );
       const text = response.text();
       const usage = extractUsage(response);
-      return { text, usage };
+      const toolCalls = extractToolCalls(response);
+      return { text, usage, ...toolCalls && { toolCalls } };
     } catch (err) {
       failed = true;
       if (err instanceof Error && (err.message.includes("fatal") || err.message.includes("401") || err.message.includes("403"))) {

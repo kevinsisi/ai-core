@@ -4,7 +4,7 @@ import {
   getBuiltInModel,
   getBuiltInProvider,
   toOpenAITools
-} from "./chunk-YHN7UO6G.js";
+} from "./chunk-KQDBTSFE.js";
 import {
   ProviderID
 } from "./chunk-LMNJWRO5.js";
@@ -54,6 +54,29 @@ var GeminiProviderAdapter = class {
 };
 
 // src/provider/adapters/openai-compatible.ts
+function parseToolArgs(value) {
+  if (!value) return {};
+  if (typeof value !== "string") return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : { value: parsed };
+  } catch {
+    return { raw: value };
+  }
+}
+function extractToolCalls(response) {
+  const calls = response.choices?.[0]?.message?.tool_calls ?? [];
+  const mapped = calls.flatMap((call, index) => {
+    const name = call.function?.name;
+    if (!name) return [];
+    return [{
+      id: call.id ?? `openai-call-${index + 1}`,
+      name,
+      args: parseToolArgs(call.function?.arguments)
+    }];
+  });
+  return mapped.length > 0 ? mapped : void 0;
+}
 function toOpenAIMessages(params) {
   const messages = [];
   if (params.systemInstruction) {
@@ -125,8 +148,10 @@ var OpenAICompatibleAdapter = class {
     const json = await response.json();
     const firstContent = json.choices?.[0]?.message?.content;
     const text = Array.isArray(firstContent) ? firstContent.map((item) => item.text || "").join("") : firstContent ?? "";
+    const toolCalls = extractToolCalls(json);
     return {
       text,
+      ...toolCalls && { toolCalls },
       usage: json.usage ? {
         promptTokens: json.usage.prompt_tokens ?? 0,
         completionTokens: json.usage.completion_tokens ?? 0,
@@ -269,6 +294,36 @@ function synthesizeModel(model) {
     }
   };
 }
+function parseToolCallJson(value, index) {
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return void 0;
+    const payload = parsed;
+    const name = typeof payload.name === "string" ? payload.name : void 0;
+    if (!name) return void 0;
+    const rawArgs = payload.args ?? payload.arguments;
+    const args = rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs) ? rawArgs : {};
+    return {
+      id: typeof payload.id === "string" ? payload.id : `opencode-call-${index + 1}`,
+      name,
+      args
+    };
+  } catch {
+    return void 0;
+  }
+}
+function extractToolCallsFromText(text) {
+  const toolCalls = [];
+  let matched = false;
+  const stripped = text.replace(/<tool_call>([\s\S]*?)<\/tool_call>/g, (_match, payload) => {
+    matched = true;
+    const call = parseToolCallJson(payload.trim(), toolCalls.length);
+    if (call) toolCalls.push(call);
+    return "";
+  });
+  if (!matched) return { text };
+  return { text: stripped, ...toolCalls.length > 0 && { toolCalls } };
+}
 async function imagePartToOpenCode(image) {
   if (image.type === "inline") {
     return {
@@ -324,10 +379,12 @@ var OpenCodeProviderAdapter = class {
     const session = await this.createSession(model);
     try {
       const message = await this.sendMessage(session.id, params, model);
-      const text = (message.parts ?? []).filter((p) => p.type === "text" && !p.synthetic).map((p) => p.text).join("");
+      const rawText = (message.parts ?? []).filter((p) => p.type === "text" && !p.synthetic).map((p) => p.text).join("");
+      const { text, toolCalls } = extractToolCallsFromText(rawText);
       const t = message.info?.tokens;
       return {
         text,
+        ...toolCalls && { toolCalls },
         usage: t ? {
           promptTokens: t.input ?? 0,
           completionTokens: (t.output ?? 0) + (t.reasoning ?? 0),
@@ -444,4 +501,4 @@ export {
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-APK7GCMC.js.map
+//# sourceMappingURL=chunk-CODYFNUT.js.map

@@ -13,12 +13,12 @@
 
 ## T1 — `toolCalls` on `GenerateResponse` (smallest, isolated)
 
-- [ ] 1.1 Extend `src/client/types.ts`: new `ToolCall` interface, add `toolCalls?: ToolCall[]` to `GenerateResponse`.
-- [ ] 1.2 Update `src/client/gemini-client.ts:generateContent`: when response contains `functionCall` parts, populate `toolCalls`. Continue using `response.text()` for the `text` field — function-call payloads are not double-encoded into text.
-- [ ] 1.3 Update `src/provider/adapters/openai.ts` & `openai-compatible.ts` (if present): map `choices[0].message.tool_calls` to ai-core `ToolCall[]`.
-- [ ] 1.4 Update `src/provider/adapters/opencode.ts:generateContent`: regex-extract `<tool_call>{...}</tool_call>` blocks from the response text, populate `toolCalls`, strip the matched substrings from `text`.
-- [ ] 1.5 Add vitest cases: Gemini function-call response, OpenAI tool-call response, OpenCode XML response, plain text response (no `toolCalls`).
-- [ ] 1.6 `npm run build:check && npm test`.
+- [x] 1.1 Extend `src/client/types.ts`: new `ToolCall` interface, add `toolCalls?: ToolCall[]` to `GenerateResponse`.
+- [x] 1.2 Update `src/client/gemini-client.ts:generateContent`: when response contains `functionCall` parts, populate `toolCalls`. Continue using `response.text()` for the `text` field — function-call payloads are not double-encoded into text.
+- [x] 1.3 Update `src/provider/adapters/openai.ts` & `openai-compatible.ts` (if present): map `choices[0].message.tool_calls` to ai-core `ToolCall[]`.
+- [x] 1.4 Update `src/provider/adapters/opencode.ts:generateContent`: regex-extract `<tool_call>{...}</tool_call>` blocks from the response text, populate `toolCalls`, strip the matched substrings from `text`.
+- [x] 1.5 Add vitest cases: Gemini function-call response, OpenAI tool-call response, OpenCode XML response, plain text response (no `toolCalls`).
+- [x] 1.6 `npm run build:check && npm test`.
 - [ ] 1.7 T1 commit `feat(client): surface toolCalls on GenerateResponse (T1/3)`.
 
 ## T2 — `imageGen` capability

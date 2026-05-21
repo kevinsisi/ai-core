@@ -58,6 +58,12 @@ export interface ProviderNativeTool {
 
 export type Tool = FunctionTool | ProviderNativeTool;
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
 // ── Generate types ─────────────────────────────────────────────────────
 
 export interface GenerateParams {
@@ -85,6 +91,7 @@ export interface TokenUsage {
 
 export interface GenerateResponse {
   text: string;
+  toolCalls?: ToolCall[];
   /** null if the model does not return usage metadata */
   usage: TokenUsage | null;
 }

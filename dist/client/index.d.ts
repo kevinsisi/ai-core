@@ -1,6 +1,6 @@
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
-import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, e as RoutedProviderSelection, g as RoutedExecution, h as RoutedStream, d as ProviderRouter, f as Tool } from '../router-Czt5Pogp.js';
-export { C as ChatMessage, F as FunctionTool, c as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage } from '../router-Czt5Pogp.js';
+import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, e as RoutedProviderSelection, h as RoutedExecution, i as RoutedStream, d as ProviderRouter, f as Tool } from '../router-DeUUXCBT.js';
+export { C as ChatMessage, F as FunctionTool, c as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage, g as ToolCall } from '../router-DeUUXCBT.js';
 import { Tool as Tool$1 } from '@google/generative-ai';
 import '../types-6qrHJZyy.js';
 

@@ -6,6 +6,7 @@ export { toGeminiTools, toOpenAITools } from "./tool-conversion.js";
 export type {
   GenerateParams,
   GenerateResponse,
+  ToolCall,
   ChatMessage,
   TokenUsage,
   ClientOptions,

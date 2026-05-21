@@ -47,6 +47,11 @@ interface ProviderNativeTool {
     config: Record<string, unknown>;
 }
 type Tool = FunctionTool | ProviderNativeTool;
+interface ToolCall {
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+}
 interface GenerateParams {
     /** Model id, e.g. "gemini-2.5-flash", "gpt-4.1-mini". */
     model: string;
@@ -70,6 +75,7 @@ interface TokenUsage {
 }
 interface GenerateResponse {
     text: string;
+    toolCalls?: ToolCall[];
     /** null if the model does not return usage metadata */
     usage: TokenUsage | null;
 }
@@ -145,4 +151,4 @@ declare class ProviderRouter {
     private canTryNextCandidate;
 }
 
-export { type ChatMessage as C, type FunctionTool as F, type GenerateParams as G, type ProviderAdapter as P, type RoutePolicy as R, StreamInterruptedError as S, type TokenUsage as T, type ClientOptions as a, type GenerateResponse as b, type ProviderNativeTool as c, ProviderRouter as d, type RoutedProviderSelection as e, type Tool as f, type RoutedExecution as g, type RoutedStream as h };
+export { type ChatMessage as C, type FunctionTool as F, type GenerateParams as G, type ProviderAdapter as P, type RoutePolicy as R, StreamInterruptedError as S, type TokenUsage as T, type ClientOptions as a, type GenerateResponse as b, type ProviderNativeTool as c, ProviderRouter as d, type RoutedProviderSelection as e, type Tool as f, type ToolCall as g, type RoutedExecution as h, type RoutedStream as i };

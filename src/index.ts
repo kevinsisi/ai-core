@@ -34,6 +34,7 @@ export {
 export type {
   GenerateParams,
   GenerateResponse,
+  ToolCall,
   ChatMessage,
   TokenUsage,
   ClientOptions,

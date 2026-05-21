@@ -377,7 +377,45 @@ describe("openai provider adapter", () => {
     });
 
     expect(result.text).toBe("hello from openai");
+    expect(result.toolCalls).toBeUndefined();
     expect(result.usage?.totalTokens).toBe(15);
+  });
+
+  it("maps OpenAI tool_calls into GenerateResponse.toolCalls", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: "",
+              tool_calls: [
+                {
+                  id: "call_1",
+                  function: {
+                    name: "lookup_vehicle",
+                    arguments: JSON.stringify({ vin: "VIN123" }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenAIProviderAdapter({
+      type: "api",
+      provider: "openai",
+      apiKey: "test-key",
+    });
+
+    const result = await adapter.generateContent({ model: "gpt-4.1-mini", prompt: "tool" });
+
+    expect(result.toolCalls).toEqual([
+      { id: "call_1", name: "lookup_vehicle", args: { vin: "VIN123" } },
+    ]);
   });
 
   it("rejects unsupported multimodal input in phase 1", async () => {
@@ -649,6 +687,38 @@ describe("opencode provider adapter", () => {
       text: "hello from opencode",
       usage: { promptTokens: 3, completionTokens: 7, totalTokens: 10 },
     });
+  });
+
+  it("extracts OpenCode XML tool calls and strips them from text", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/session")) {
+        return { ok: true, json: async () => ({ id: "tool-session" }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          parts: [
+            {
+              type: "text",
+              text: "Let me check.<tool_call>{\"name\":\"lookup_stock\",\"args\":{\"sku\":\"S1\"}}</tool_call>",
+            },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "pool", provider: "opencode" },
+      { defaultModel: { providerID: "openai", id: "gpt-5.5" } }
+    );
+
+    const result = await adapter.generateContent({ model: "openai/gpt-5.5", prompt: "tool" });
+
+    expect(result.text).toBe("Let me check.");
+    expect(result.toolCalls).toEqual([
+      { id: "opencode-call-1", name: "lookup_stock", args: { sku: "S1" } },
+    ]);
   });
 
   it("uses the default provider when the selected model has no provider prefix", async () => {

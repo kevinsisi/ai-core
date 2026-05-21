@@ -53,7 +53,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import type { GenerateParams, GenerateResponse, ImagePart } from "../../client/types.js";
+import type { GenerateParams, GenerateResponse, ImagePart, ToolCall } from "../../client/types.js";
 import type { ApiKeyCredential, OAuthCredential, PoolCredential } from "../auth/index.js";
 import { getBuiltInModel } from "../models.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
@@ -174,6 +174,40 @@ function synthesizeModel(model: OpenCodeModelRef): ModelDefinition {
   };
 }
 
+function parseToolCallJson(value: string, index: number): ToolCall | undefined {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const payload = parsed as Record<string, unknown>;
+    const name = typeof payload.name === "string" ? payload.name : undefined;
+    if (!name) return undefined;
+    const rawArgs = payload.args ?? payload.arguments;
+    const args = rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)
+      ? (rawArgs as Record<string, unknown>)
+      : {};
+    return {
+      id: typeof payload.id === "string" ? payload.id : `opencode-call-${index + 1}`,
+      name,
+      args,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function extractToolCallsFromText(text: string): { text: string; toolCalls?: ToolCall[] } {
+  const toolCalls: ToolCall[] = [];
+  let matched = false;
+  const stripped = text.replace(/<tool_call>([\s\S]*?)<\/tool_call>/g, (_match, payload: string) => {
+    matched = true;
+    const call = parseToolCallJson(payload.trim(), toolCalls.length);
+    if (call) toolCalls.push(call);
+    return "";
+  });
+  if (!matched) return { text };
+  return { text: stripped, ...(toolCalls.length > 0 && { toolCalls }) };
+}
+
 async function imagePartToOpenCode(image: ImagePart): Promise<OpenCodeFilePart> {
   if (image.type === "inline") {
     return {
@@ -242,14 +276,16 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     try {
       const message = await this.sendMessage(session.id, params, model);
 
-      const text = (message.parts ?? [])
+      const rawText = (message.parts ?? [])
         .filter((p): p is OpenCodeTextPart => p.type === "text" && !p.synthetic)
         .map((p) => p.text)
         .join("");
+      const { text, toolCalls } = extractToolCallsFromText(rawText);
 
       const t = message.info?.tokens;
       return {
         text,
+        ...(toolCalls && { toolCalls }),
         usage: t
           ? {
               promptTokens: t.input ?? 0,
