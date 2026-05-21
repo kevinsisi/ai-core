@@ -1,6 +1,13 @@
 import { ProviderRouter } from "../provider/router.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "../provider/types.js";
-import type { GenerateParams, GenerateResponse, ImageGenParams, ImageGenResponse } from "./types.js";
+import type {
+  ChatEvent,
+  ChatToolContext,
+  GenerateParams,
+  GenerateResponse,
+  ImageGenParams,
+  ImageGenResponse,
+} from "./types.js";
 
 export interface MultiProviderClientOptions {
   adapters: ProviderAdapter[];
@@ -99,6 +106,37 @@ export class MultiProviderClient {
 
   imageGenWithSelection(params: ImageGenParams, policy?: RoutePolicy) {
     return this.router.executeImageGen(params, this.mergePolicy(policy));
+  }
+
+  /**
+   * Streaming chat with provider-specific function-call loop. Provider is
+   * selected once at the start of the call; mid-loop provider fallback is
+   * not supported (chat state lives inside the adapter's session).
+   *
+   * Caller supplies `ctx.onToolCall` to execute tools the model invokes;
+   * the adapter feeds results back into the next round. The loop is capped
+   * by `ctx.maxToolRounds` (default 5).
+   */
+  async *chatWithTools(
+    params: GenerateParams,
+    ctx: ChatToolContext,
+    policy?: RoutePolicy,
+  ): AsyncIterable<ChatEvent> {
+    const { selection, stream } = this.router.executeChatWithTools(
+      params,
+      ctx,
+      this.mergePolicy(policy),
+    );
+    this.onSelect?.(selection, params);
+    yield* stream;
+  }
+
+  chatWithToolsAndSelection(
+    params: GenerateParams,
+    ctx: ChatToolContext,
+    policy?: RoutePolicy,
+  ) {
+    return this.router.executeChatWithTools(params, ctx, this.mergePolicy(policy));
   }
 
   getRouter(): ProviderRouter {

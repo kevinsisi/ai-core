@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MultiProviderClient } from "../client/multi-provider-client.js";
-import type { GenerateParams } from "../client/types.js";
+import type { ChatEvent, ChatToolContext, GenerateParams } from "../client/types.js";
+import { MaxToolRoundsExceededError } from "../client/types.js";
 import { getBuiltInProvider } from "../provider/models.js";
 import type { ProviderAdapter } from "../provider/types.js";
 
@@ -238,6 +239,87 @@ describe("MultiProviderClient", () => {
         expect.objectContaining({ provider: "gemini", model: "gemini-3-pro-image-preview" }),
         expect.objectContaining({ prompt: "hi" })
       );
+    });
+
+    it("collects all chatWithTools events end-to-end (text + done)", async () => {
+      const gemini = makeGeminiAdapter({
+        chatWithTools: async function* () {
+          yield { type: "text_delta", delta: "hello " } satisfies ChatEvent;
+          yield { type: "text_delta", delta: "world" } satisfies ChatEvent;
+          yield { type: "usage", usage: { promptTokens: 5, completionTokens: 2, totalTokens: 7 } } satisfies ChatEvent;
+          yield { type: "done", fullText: "hello world" } satisfies ChatEvent;
+        },
+      });
+
+      const client = new MultiProviderClient({ adapters: [gemini] });
+      const events: ChatEvent[] = [];
+      for await (const ev of client.chatWithTools(
+        { model: "gemini-2.5-flash", prompt: "hi" },
+        {},
+      )) {
+        events.push(ev);
+      }
+      expect(events.map((e) => e.type)).toEqual(["text_delta", "text_delta", "usage", "done"]);
+      const doneEvent = events.find((e) => e.type === "done");
+      expect(doneEvent?.type === "done" && doneEvent.fullText).toBe("hello world");
+    });
+
+    it("routes a tool_call event to ctx.onToolCall and continues", async () => {
+      const recorded: Array<{ name: string; result: string }> = [];
+      const gemini = makeGeminiAdapter({
+        chatWithTools: async function* (_params, ctx: ChatToolContext) {
+          yield { type: "tool_call", id: "1", name: "search", args: { q: "cars" } } satisfies ChatEvent;
+          const result = ctx.onToolCall
+            ? await ctx.onToolCall({ id: "1", name: "search", args: { q: "cars" } })
+            : "";
+          recorded.push({ name: "search", result });
+          yield { type: "text_delta", delta: `found ${result}` } satisfies ChatEvent;
+          yield { type: "done", fullText: `found ${result}` } satisfies ChatEvent;
+        },
+      });
+
+      const client = new MultiProviderClient({ adapters: [gemini] });
+      const events: ChatEvent[] = [];
+      for await (const ev of client.chatWithTools(
+        { model: "gemini-2.5-flash", prompt: "find cars" },
+        { onToolCall: async (call) => `result for ${call.args.q}` },
+      )) {
+        events.push(ev);
+      }
+      expect(recorded).toEqual([{ name: "search", result: "result for cars" }]);
+      const doneEvent = events.find((e) => e.type === "done");
+      expect(doneEvent?.type === "done" && doneEvent.fullText).toBe("found result for cars");
+    });
+
+    it("throws when no adapter in the chain supports chatWithTools", async () => {
+      const client = new MultiProviderClient({ adapters: [makeOpenCodeAdapter()] });
+      // OpenCode adapter constructed here doesn't have chatWithTools (mock).
+      const iterator = client.chatWithTools(
+        { model: "opencode/deepseek-v4-flash-free", prompt: "hi" },
+        {},
+      );
+      await expect((async () => {
+        for await (const _ of iterator) {
+          // drain
+        }
+      })()).rejects.toThrow();
+    });
+
+    it("propagates MaxToolRoundsExceededError from the adapter", async () => {
+      const gemini = makeGeminiAdapter({
+        chatWithTools: async function* () {
+          throw new MaxToolRoundsExceededError(5, 5);
+        },
+      });
+      const client = new MultiProviderClient({ adapters: [gemini] });
+      await expect((async () => {
+        for await (const _ of client.chatWithTools(
+          { model: "gemini-2.5-flash", prompt: "hi" },
+          {},
+        )) {
+          // drain
+        }
+      })()).rejects.toBeInstanceOf(MaxToolRoundsExceededError);
     });
 
     it("skips adapters lacking imageGen and uses the next one in the chain", async () => {

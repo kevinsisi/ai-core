@@ -1,12 +1,17 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GeminiClient } from "../../client/gemini-client.js";
+import { randomUUID } from "node:crypto";
+import { GoogleGenerativeAI, type FunctionResponsePart, type Part } from "@google/generative-ai";
+import { GeminiClient, buildParts } from "../../client/gemini-client.js";
 import type { KeyPool } from "../../key-pool/key-pool.js";
 import { withRetry } from "../../retry/with-retry.js";
+import { toGeminiTools } from "../../client/tool-conversion.js";
+import { MaxToolRoundsExceededError } from "../../client/types.js";
 import type { PoolCredential } from "../auth/index.js";
 import { getBuiltInModel, getBuiltInProvider } from "../models.js";
 import { ProviderID, type ModelDefinition } from "../schema.js";
 import type { ProviderAdapter } from "../types.js";
 import type {
+  ChatEvent,
+  ChatToolContext,
   GenerateParams,
   GenerateResponse,
   ImageGenParams,
@@ -120,6 +125,185 @@ async function callGeminiImageGen(
   };
 }
 
+async function runGeminiChatLoop(
+  apiKey: string,
+  params: GenerateParams,
+  ctx: ChatToolContext,
+  push: (ev: ChatEvent) => void,
+  maxRounds: number,
+): Promise<void> {
+  const genai = new GoogleGenerativeAI(apiKey);
+  const tools = toGeminiTools(params.tools);
+  const model = genai.getGenerativeModel({
+    model: params.model,
+    ...(params.systemInstruction && { systemInstruction: params.systemInstruction }),
+    ...(tools && { tools }),
+  });
+  const history = (params.history ?? []).map((msg) => ({
+    role: msg.role,
+    parts: [{ text: msg.parts }],
+  }));
+  const chat = model.startChat({ history });
+
+  const initialParts: Part[] = params.images?.length
+    ? buildParts(params.prompt, params.images)
+    : [{ text: params.prompt }];
+
+  let fullText = "";
+  let result = await chat.sendMessageStream(initialParts);
+  let round = 0;
+
+  while (true) {
+    let sawToolCall = false;
+    const functionResponses: FunctionResponsePart[] = [];
+
+    for await (const chunk of result.stream) {
+      const calls = chunk.functionCalls();
+      if (calls && calls.length > 0) {
+        sawToolCall = true;
+        for (const fc of calls) {
+          const id = randomUUID();
+          const args = (fc.args as Record<string, unknown>) ?? {};
+          push({ type: "tool_call", id, name: fc.name, args });
+          const toolResult = ctx.onToolCall
+            ? await ctx.onToolCall({ id, name: fc.name, args })
+            : "";
+          functionResponses.push({
+            functionResponse: { name: fc.name, response: { result: toolResult } },
+          });
+        }
+      } else {
+        const text = chunk.text();
+        if (text) {
+          fullText += text;
+          push({ type: "text_delta", delta: text });
+        }
+      }
+    }
+
+    if (sawToolCall && functionResponses.length > 0) {
+      round += 1;
+      if (round >= maxRounds) {
+        throw new MaxToolRoundsExceededError(round, maxRounds);
+      }
+      result = await chat.sendMessageStream(functionResponses);
+      continue;
+    }
+
+    // Empty-chunk fallback after function call (Gemini SDK quirk: streaming
+    // chunks after a tool response are sometimes blank, but the aggregated
+    // response object has the full text).
+    if (!fullText) {
+      try {
+        const fb = (await result.response).text();
+        if (fb) {
+          fullText = fb;
+          push({ type: "text_delta", delta: fb });
+        }
+      } catch {
+        // ignore — fall through to terminal events
+      }
+    }
+    break;
+  }
+
+  const response = await result.response;
+  const usage = extractUsageFromResponse(response);
+  if (usage) push({ type: "usage", usage });
+  push({ type: "done", fullText });
+}
+
+async function* runGeminiChatWithTools(
+  pool: KeyPool,
+  maxRetries: number,
+  params: GenerateParams,
+  ctx: ChatToolContext,
+): AsyncIterable<ChatEvent> {
+  const queue: ChatEvent[] = [];
+  let resolveNext: (() => void) | null = null;
+  let runError: unknown = null;
+  let runDone = false;
+
+  const push = (ev: ChatEvent) => {
+    queue.push(ev);
+    if (resolveNext) {
+      const r = resolveNext;
+      resolveNext = null;
+      r();
+    }
+  };
+
+  const maxRounds = ctx.maxToolRounds ?? 5;
+
+  const driver = (async () => {
+    const [initialKey] = await pool.allocate(1);
+    let currentKey = initialKey;
+    let failed = false;
+    let authFailure = false;
+
+    try {
+      await withRetry(
+        async (apiKey) => {
+          currentKey = apiKey;
+          await runGeminiChatLoop(apiKey, params, ctx, push, maxRounds);
+        },
+        initialKey,
+        {
+          maxRetries,
+          rotateKey: async () => {
+            await pool.release(currentKey, true, authFailure);
+            const [nextKey] = await pool.allocate(1);
+            return nextKey;
+          },
+          onRetry: (info) => {
+            if (info.errorClass === "fatal") authFailure = true;
+          },
+        },
+      );
+    } catch (err) {
+      failed = true;
+      const message = err instanceof Error ? err.message : String(err);
+      if (
+        message.includes("fatal") ||
+        message.includes("401") ||
+        message.includes("403")
+      ) {
+        authFailure = true;
+      }
+      throw err;
+    } finally {
+      await pool.release(currentKey, failed, authFailure).catch(() => {});
+    }
+  })();
+
+  driver
+    .catch((err) => {
+      runError = err;
+    })
+    .finally(() => {
+      runDone = true;
+      if (resolveNext) {
+        const r = resolveNext;
+        resolveNext = null;
+        r();
+      }
+    });
+
+  while (true) {
+    if (queue.length > 0) {
+      yield queue.shift()!;
+      continue;
+    }
+    if (runDone) {
+      if (runError) throw runError;
+      return;
+    }
+    await new Promise<void>((r) => {
+      resolveNext = r;
+    });
+  }
+}
+
 export class GeminiProviderAdapter implements ProviderAdapter {
   readonly provider = getBuiltInProvider("gemini")!;
 
@@ -156,6 +340,22 @@ export class GeminiProviderAdapter implements ProviderAdapter {
 
   streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown> {
     return this.client.streamContent(params);
+  }
+
+  /**
+   * Streaming chat with native Gemini function-calling. Loop runs inside
+   * the adapter: the model stream is consumed, `functionCalls()` are turned
+   * into ChatEvents and dispatched to `ctx.onToolCall`, results are pushed
+   * back as `FunctionResponsePart`, and streaming continues. Caps at
+   * `ctx.maxToolRounds ?? 5` rounds; throws `MaxToolRoundsExceededError`
+   * if the model keeps invoking tools past the cap.
+   *
+   * Preserves the v2.22.x "empty chunk after function call" SDK quirk:
+   * when the post-tool-call stream produces no text chunks, the aggregated
+   * `result.response.text()` is emitted as a single `text_delta`.
+   */
+  chatWithTools(params: GenerateParams, ctx: ChatToolContext): AsyncIterable<ChatEvent> {
+    return runGeminiChatWithTools(this.pool, this.maxRetries, params, ctx);
   }
 
   /**

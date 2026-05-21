@@ -32,21 +32,21 @@
 - [x] 2.7 Re-export `ImageGenParams`, `ImageGenResponse`, `imageGen` method from `src/client/index.ts` & root `src/index.ts`.
 - [x] 2.8 vitest cases: Gemini happy path (primary model), Gemini fallback model retry on 404, dedicated-key bypasses pool, OpenCode adapter throws `CapabilityNotSupportedError`, router skips OpenCode silently and selects Gemini when chain is `['opencode','gemini']`.
 - [x] 2.9 `npm run build:check && npm test`.
-- [ ] 2.10 T2 commit `feat(provider): add imageGen capability with Gemini adapter (T2/3)`.
+- [x] 2.10 T2 commit `feat(provider): add imageGen capability with Gemini adapter (T2/3)` — committed as `bdd5eb7`.
 
 ## T3 — `chatWithTools` (streaming + tool loop)
 
-- [ ] 3.1 Extend `src/client/types.ts`: `ChatEvent` discriminated union (`text_delta` / `tool_call` / `usage` / `done`), `ChatToolContext` ({ `onToolCall`, `maxToolRounds` }).
-- [ ] 3.2 Extend `src/provider/types.ts`: optional `chatWithTools?(params, ctx): AsyncIterable<ChatEvent>` on `ProviderAdapter`.
-- [ ] 3.3 Implement `GeminiProviderAdapter.chatWithTools`: bridge `chat.sendMessageStream` to AsyncIterable via internal queue; loop on `functionCalls()` → `ctx.onToolCall` → re-stream; emit `text_delta` for text chunks, `tool_call` events for function calls, `usage` from `response.usageMetadata`, `done` with full accumulated text. Round cap = `ctx.maxToolRounds ?? 5`. Preserve the v2.22.x empty-chunk-after-function-call SDK fallback (`(await result.response).text()`).
-- [ ] 3.4 Implement `OpenCodeProviderAdapter.chatWithTools`: flatten history to "User:/Assistant:" prompt, build tool-description block when `params.tools` present, loop on `<tool_call>{name,args}</tool_call>` regex → `ctx.onToolCall` → continue. Emit final assistant text as a single `text_delta` followed by `done`. Round cap respected.
-- [ ] 3.5 Implement `OpenAIProviderAdapter.chatWithTools` (and `openai-compatible`): use OpenAI chat completions streaming with `tools` array; map `delta.content` → `text_delta`, complete `tool_calls[i]` → `tool_call` event + push `role:'tool'` message back into the next stream call.
-- [ ] 3.6 Implement `OpenRouterProviderAdapter.chatWithTools`: same shape as OpenAI (compatible API).
-- [ ] 3.7 Extend `src/client/multi-provider-client.ts`: `async *chatWithTools(params, ctx, policy?)` proxies via router with `requiredMethod: 'chatWithTools'`; fires `onSelect` with selection before yielding.
-- [ ] 3.8 Add `MaxToolRoundsExceededError` to errors export; thrown when loop exceeds `ctx.maxToolRounds`.
-- [ ] 3.9 Re-export `ChatEvent`, `ChatToolContext`, `MaxToolRoundsExceededError`, `chatWithTools` from `src/client/index.ts` & root `src/index.ts`.
-- [ ] 3.10 vitest cases: Gemini text-only stream, Gemini single tool call round, Gemini multi-round (model calls tool twice), Gemini empty-chunk fallback path; OpenCode XML loop happy path + max-rounds cap; OpenAI streaming tool call; cross-adapter `MaxToolRoundsExceededError`.
-- [ ] 3.11 `npm run build:check && npm test`.
+- [x] 3.1 Extend `src/client/types.ts`: `ChatEvent` discriminated union (`text_delta` / `tool_call` / `usage` / `done`), `ChatToolContext` ({ `onToolCall`, `maxToolRounds` }).
+- [x] 3.2 Extend `src/provider/types.ts`: optional `chatWithTools?(params, ctx): AsyncIterable<ChatEvent>` on `ProviderAdapter`.
+- [x] 3.3 Implement `GeminiProviderAdapter.chatWithTools`: bridge `chat.sendMessageStream` to AsyncIterable via internal queue; loop on `functionCalls()` → `ctx.onToolCall` → re-stream; emit `text_delta` for text chunks, `tool_call` events for function calls, `usage` from `response.usageMetadata`, `done` with full accumulated text. Round cap = `ctx.maxToolRounds ?? 5`. Preserve the v2.22.x empty-chunk-after-function-call SDK fallback (`(await result.response).text()`).
+- [x] 3.4 Implement `OpenCodeProviderAdapter.chatWithTools`: flatten history to "User:/Assistant:" prompt, build tool-description block when `params.tools` present, loop on `<tool_call>{name,args}</tool_call>` regex → `ctx.onToolCall` → continue. Emit final assistant text as a single `text_delta` followed by `done`. Round cap respected.
+- [ ] 3.5 Implement `OpenAIProviderAdapter.chatWithTools` (and `openai-compatible`): use OpenAI chat completions streaming with `tools` array; map `delta.content` → `text_delta`, complete `tool_calls[i]` → `tool_call` event + push `role:'tool'` message back into the next stream call. — **Deferred**: not required for sheet-to-car migration (uses Gemini + OpenCode only). Follow-up issue.
+- [ ] 3.6 Implement `OpenRouterProviderAdapter.chatWithTools`: same shape as OpenAI (compatible API). — **Deferred** with 3.5.
+- [x] 3.7 Extend `src/client/multi-provider-client.ts`: `async *chatWithTools(params, ctx, policy?)` proxies via router with `requiredMethod: 'chatWithTools'`; fires `onSelect` with selection before yielding.
+- [x] 3.8 Add `MaxToolRoundsExceededError` to errors export; thrown when loop exceeds `ctx.maxToolRounds`.
+- [x] 3.9 Re-export `ChatEvent`, `ChatToolContext`, `MaxToolRoundsExceededError`, `chatWithTools` from `src/client/index.ts` & root `src/index.ts`.
+- [x] 3.10 vitest cases: Gemini text-only stream, Gemini single tool call round, Gemini multi-round (model calls tool twice), Gemini empty-chunk fallback path; OpenCode XML loop happy path + max-rounds cap; OpenAI streaming tool call; cross-adapter `MaxToolRoundsExceededError`.
+- [x] 3.11 `npm run build:check && npm test`.
 - [ ] 3.12 T3 commit `feat(client): add chatWithTools AsyncIterable<ChatEvent> (T3/3)`.
 
 ## T4 — Release plumbing

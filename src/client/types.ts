@@ -144,3 +144,41 @@ export class CapabilityNotSupportedError extends Error {
     this.name = "CapabilityNotSupportedError";
   }
 }
+
+/**
+ * Thrown by `chatWithTools` when the model keeps emitting tool calls past
+ * `ctx.maxToolRounds`. Caller may catch and retry with a higher cap or
+ * a different prompt; default cap is 5.
+ */
+export class MaxToolRoundsExceededError extends Error {
+  constructor(public readonly roundsCompleted: number, public readonly cap: number) {
+    super(`Tool-call loop exceeded ${cap} rounds (completed ${roundsCompleted})`);
+    this.name = "MaxToolRoundsExceededError";
+  }
+}
+
+// ── Chat events (streaming + tool loop) ────────────────────────────────
+
+/**
+ * Discriminated union emitted by `chatWithTools`. Adapters loop internally
+ * over tool calls (via `ctx.onToolCall`) and emit:
+ *
+ *   - `text_delta`: incremental text chunks from the assistant.
+ *   - `tool_call`: model wants to invoke a tool; ctx.onToolCall resolves
+ *     with the result string, which the adapter feeds back into the next
+ *     round automatically.
+ *   - `usage`: token usage when the underlying call returns it.
+ *   - `done`: terminal event; `fullText` is the accumulated text response.
+ */
+export type ChatEvent =
+  | { type: "text_delta"; delta: string }
+  | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "usage"; usage: TokenUsage }
+  | { type: "done"; fullText: string };
+
+export interface ChatToolContext {
+  /** Caller-supplied tool executor. Return value is fed back to the model. */
+  onToolCall?: (call: { id: string; name: string; args: Record<string, unknown> }) => Promise<string>;
+  /** Hard cap on tool-call loop iterations. Default 5. */
+  maxToolRounds?: number;
+}

@@ -53,7 +53,17 @@
  */
 
 import { readFile } from "node:fs/promises";
-import type { GenerateParams, GenerateResponse, ImagePart, ToolCall } from "../../client/types.js";
+import { MaxToolRoundsExceededError } from "../../client/types.js";
+import type {
+  ChatEvent,
+  ChatToolContext,
+  GenerateParams,
+  GenerateResponse,
+  ImagePart,
+  ToolCall,
+  Tool,
+  FunctionTool,
+} from "../../client/types.js";
 import type { ApiKeyCredential, OAuthCredential, PoolCredential } from "../auth/index.js";
 import { getBuiltInModel } from "../models.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
@@ -208,6 +218,45 @@ function extractToolCallsFromText(text: string): { text: string; toolCalls?: Too
   return { text: stripped, ...(toolCalls.length > 0 && { toolCalls }) };
 }
 
+function isFunctionTool(tool: Tool): tool is FunctionTool {
+  return tool.type === "function";
+}
+
+function buildOpenCodeToolBlock(tools: Tool[] | undefined): string {
+  const functions = (tools ?? []).filter(isFunctionTool);
+  if (functions.length === 0) return "";
+  const lines: string[] = [
+    "You have access to the following tools. To call a tool, embed this exact block in your response:",
+    "",
+    '<tool_call>{"name":"TOOL_NAME","args":{...}}</tool_call>',
+    "",
+    "Only call one tool at a time. After seeing the tool result, continue your response.",
+    "",
+    "Available tools:",
+  ];
+  for (const tool of functions) {
+    const params = (tool.parameters ?? {}) as {
+      required?: string[];
+      properties?: Record<string, { description?: string }>;
+    };
+    const required = params.required ?? [];
+    const propLines = Object.entries(params.properties ?? {})
+      .map(
+        ([k, v]) =>
+          `    - ${k}${required.includes(k) ? " (required)" : ""}: ${v?.description ?? ""}`,
+      )
+      .join("\n");
+    lines.push(`\n- ${tool.name}: ${tool.description ?? ""}${propLines ? "\n" + propLines : ""}`);
+  }
+  return lines.join("\n");
+}
+
+function serializeHistory(history: { role: "user" | "model"; parts: string }[]): string {
+  return history
+    .map((msg) => `${msg.role === "model" ? "Assistant" : "User"}: ${msg.parts}`)
+    .join("\n\n");
+}
+
 async function imagePartToOpenCode(image: ImagePart): Promise<OpenCodeFilePart> {
   if (image.type === "inline") {
     return {
@@ -303,6 +352,99 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     throw new Error(
       "OpenCodeProviderAdapter does not support streaming. Use generateContent instead.",
     );
+  }
+
+  /**
+   * Streaming chat with tool-use orchestration. OpenCode's session API is
+   * one-shot request/response, so streaming here means: each round's full
+   * assistant text is emitted as a single `text_delta` event, then a
+   * `done` event closes the iterable.
+   *
+   * Function calling is implemented through the prompt: a tool description
+   * block is appended to the system prompt, and the model is instructed to
+   * emit `<tool_call>{...}</tool_call>` blocks. Each round, the adapter
+   * extracts those, dispatches via `ctx.onToolCall`, appends the result
+   * to the conversation, and sends the next message.
+   */
+  async *chatWithTools(
+    params: GenerateParams,
+    ctx: ChatToolContext,
+  ): AsyncIterable<ChatEvent> {
+    const model = this.resolveModel(params.model);
+    if (!model) {
+      throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
+    }
+
+    const maxRounds = ctx.maxToolRounds ?? 5;
+    const toolBlock = buildOpenCodeToolBlock(params.tools);
+    const systemInstruction = toolBlock
+      ? `${params.systemInstruction ?? ""}\n\n---\n${toolBlock}`
+      : params.systemInstruction;
+
+    const transcript = serializeHistory(params.history ?? []);
+    let conversation = transcript
+      ? `${transcript}\n\nUser: ${params.prompt}`
+      : `User: ${params.prompt}`;
+
+    const session = await this.createSession(model);
+    let aggregated = "";
+
+    try {
+      for (let round = 0; round < maxRounds; round += 1) {
+        const isFirst = round === 0;
+        const callParams: GenerateParams = {
+          ...params,
+          prompt: isFirst ? conversation : conversation + "\n\nAssistant:",
+          systemInstruction,
+          // Images only on the first round (subsequent rounds replay text only).
+          ...(isFirst ? {} : { images: undefined }),
+        };
+        const message = await this.sendMessage(session.id, callParams, model);
+        const rawText = (message.parts ?? [])
+          .filter((p): p is OpenCodeTextPart => p.type === "text" && !p.synthetic)
+          .map((p) => p.text)
+          .join("");
+        const { text, toolCalls } = extractToolCallsFromText(rawText);
+
+        if (text) {
+          aggregated += text;
+          yield { type: "text_delta", delta: text };
+        }
+
+        if (!toolCalls || toolCalls.length === 0) {
+          const usage = message.info?.tokens
+            ? {
+                promptTokens: message.info.tokens.input ?? 0,
+                completionTokens:
+                  (message.info.tokens.output ?? 0) + (message.info.tokens.reasoning ?? 0),
+                totalTokens:
+                  (message.info.tokens.input ?? 0) +
+                  (message.info.tokens.output ?? 0) +
+                  (message.info.tokens.reasoning ?? 0),
+              }
+            : null;
+          if (usage) yield { type: "usage", usage };
+          yield { type: "done", fullText: aggregated };
+          return;
+        }
+
+        // Round produced one or more tool calls — dispatch them, append the
+        // results to the running conversation, and loop.
+        const toolResults: string[] = [];
+        for (const call of toolCalls) {
+          yield { type: "tool_call", id: call.id, name: call.name, args: call.args };
+          const result = ctx.onToolCall ? await ctx.onToolCall(call) : "";
+          toolResults.push(`[Tool "${call.name}" result]: ${result}`);
+        }
+
+        const assistantTurn = text ? text : "(calling tool)";
+        conversation = `${conversation}\n\nAssistant: ${assistantTurn}\n${toolResults.join("\n")}`;
+      }
+
+      throw new MaxToolRoundsExceededError(maxRounds, maxRounds);
+    } finally {
+      this.deleteSession(session.id);
+    }
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────

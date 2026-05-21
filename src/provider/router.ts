@@ -1,5 +1,12 @@
 import { CapabilityNotSupportedError } from "../client/types.js";
-import type { GenerateParams, GenerateResponse, ImageGenParams, ImageGenResponse } from "../client/types.js";
+import type {
+  ChatEvent,
+  ChatToolContext,
+  GenerateParams,
+  GenerateResponse,
+  ImageGenParams,
+  ImageGenResponse,
+} from "../client/types.js";
 import { defaultProviderPriority, getBuiltInModel } from "./models.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 
@@ -52,6 +59,11 @@ export interface RoutedStream {
 export interface RoutedImageGen {
   selection: RoutedProviderSelection;
   response: ImageGenResponse;
+}
+
+export interface RoutedChat {
+  selection: RoutedProviderSelection;
+  stream: AsyncIterable<ChatEvent>;
 }
 
 export class ProviderRouter {
@@ -110,6 +122,25 @@ export class ProviderRouter {
     };
     const { adapter, selection } = this.selectAdapter(effectivePolicy);
     const stream = adapter.streamContent({ ...params, model: selection.model });
+    return { selection, stream };
+  }
+
+  executeChatWithTools(
+    params: GenerateParams,
+    ctx: ChatToolContext,
+    policy: RoutePolicy = {},
+  ): RoutedChat {
+    const effectivePolicy: RoutePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { tools: true, ...(policy.requiredCapabilities ?? {}) },
+      requiredMethod: "chatWithTools",
+    };
+    const { adapter, selection } = this.selectAdapter(effectivePolicy);
+    if (!adapter.chatWithTools) {
+      throw new CapabilityNotSupportedError(selection.provider, "chatWithTools");
+    }
+    const stream = adapter.chatWithTools({ ...params, model: selection.model }, ctx);
     return { selection, stream };
   }
 
