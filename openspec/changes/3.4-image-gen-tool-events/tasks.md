@@ -47,7 +47,7 @@
 - [x] 3.9 Re-export `ChatEvent`, `ChatToolContext`, `MaxToolRoundsExceededError`, `chatWithTools` from `src/client/index.ts` & root `src/index.ts`.
 - [x] 3.10 vitest cases: Gemini text-only stream, Gemini single tool call round, Gemini multi-round (model calls tool twice), Gemini empty-chunk fallback path; OpenCode XML loop happy path + max-rounds cap; OpenAI streaming tool call; cross-adapter `MaxToolRoundsExceededError`.
 - [x] 3.11 `npm run build:check && npm test`.
-- [ ] 3.12 T3 commit `feat(client): add chatWithTools AsyncIterable<ChatEvent> (T3/3)`.
+- [x] 3.12 T3 commit `feat(client): add chatWithTools AsyncIterable<ChatEvent> (T3/3)` — committed as `eb7968b`.
 
 ## T4 — Release plumbing
 
@@ -56,8 +56,8 @@
 - [x] 4.3 Update `README.md`: usage sections for `toolCalls` field, `imageGen`, `chatWithTools`. Document `options.fallbackModel` / `options.dedicatedKey` for Gemini imageGen. Document `maxToolRounds` default and override.
 - [x] 4.4 Run full vitest suite — all green (148 tests).
 - [x] 4.5 `npm run build` (tsup) — produce dist for all `exports` paths.
-- [ ] 4.6 T4 commit `chore: bump v3.4.0 + README updates (T4/3)`.
-- [ ] 4.7 Open PR `feat/3.4-image-gen-tool-events` → `main`, wait for Kevin review.
+- [x] 4.6 T4 commit `chore: bump v3.4.0 + README updates (T4/3)` — committed as `b8a7835`.
+- [ ] 4.7 Open PR `feat/3.4-image-gen-tool-events` → `main`, wait for Kevin review — PR created at <https://github.com/kevinsisi/ai-core/pull/1>; awaiting Kevin review.
 - [ ] 4.8 After merge: tag `v3.4.0`, publish to GitHub Packages npm registry (`npm publish`).
 
 ## T5 — sheet-to-car migration (downstream, separate repo PR)
