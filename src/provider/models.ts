@@ -16,6 +16,34 @@ const geminiModels = [
     outputLimit: 65_536,
     costTier: "low" as const,
   },
+  {
+    id: "gemini-3-pro-image-preview",
+    provider: ProviderID.Gemini,
+    name: "Gemini 3 Pro Image Preview",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true,
+    },
+    costTier: "high" as const,
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    provider: ProviderID.Gemini,
+    name: "Gemini 2.5 Flash Image",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true,
+    },
+    costTier: "medium" as const,
+  },
 ];
 
 const openAIModels = [
@@ -54,7 +82,29 @@ const openRouterModels = [
   },
 ];
 
+const openCodeModels = [
+  {
+    id: "opencode/deepseek-v4-flash-free",
+    provider: ProviderID.OpenCode,
+    name: "OpenCode DeepSeek V4 Flash Free",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: false,
+    },
+    costTier: "low" as const,
+  },
+];
+
 export const builtInProviders: ProviderDefinition[] = [
+  {
+    id: ProviderID.OpenCode,
+    name: "OpenCode",
+    authTypes: ["api", "oauth", "pool"],
+    models: openCodeModels,
+  },
   {
     id: ProviderID.OpenAI,
     name: "OpenAI",
@@ -75,7 +125,7 @@ export const builtInProviders: ProviderDefinition[] = [
   },
 ];
 
-export const defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini] as const;
+export const defaultProviderPriority = [ProviderID.OpenCode, ProviderID.Gemini, ProviderID.OpenAI] as const;
 
 export function getBuiltInProvider(providerID: string) {
   return builtInProviders.find((provider) => provider.id === providerID);

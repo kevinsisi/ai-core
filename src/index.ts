@@ -27,6 +27,8 @@ export type { ErrorClass, RetryOptions, RetryEvent, ProviderErrorClassifier } fr
 export {
   GeminiClient,
   MultiProviderClient,
+  CapabilityNotSupportedError,
+  MaxToolRoundsExceededError,
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools,
@@ -34,7 +36,12 @@ export {
 export type {
   GenerateParams,
   GenerateResponse,
+  ImageGenParams,
+  ImageGenResponse,
+  ToolCall,
   ChatMessage,
+  ChatEvent,
+  ChatToolContext,
   TokenUsage,
   ClientOptions,
   MultiProviderClientOptions,

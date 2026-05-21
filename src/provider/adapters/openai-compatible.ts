@@ -1,6 +1,6 @@
 import { toOpenAITools } from "../../client/tool-conversion.js";
 import { StreamInterruptedError } from "../../client/types.js";
-import type { GenerateParams, GenerateResponse } from "../../client/types.js";
+import type { GenerateParams, GenerateResponse, ToolCall } from "../../client/types.js";
 import type { ApiKeyCredential, OAuthCredential } from "../auth/index.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
 import type { ProviderAdapter } from "../types.js";
@@ -9,6 +9,13 @@ interface OpenAIChatResponse {
   choices?: Array<{
     message?: {
       content?: string | Array<{ type: string; text?: string }>;
+      tool_calls?: Array<{
+        id?: string;
+        function?: {
+          name?: string;
+          arguments?: string | Record<string, unknown>;
+        };
+      }>;
     };
   }>;
   usage?: {
@@ -16,6 +23,33 @@ interface OpenAIChatResponse {
     completion_tokens?: number;
     total_tokens?: number;
   };
+}
+
+function parseToolArgs(value: string | Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value !== "string") return value;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : { value: parsed };
+  } catch {
+    return { raw: value };
+  }
+}
+
+function extractToolCalls(response: OpenAIChatResponse): ToolCall[] | undefined {
+  const calls = response.choices?.[0]?.message?.tool_calls ?? [];
+  const mapped = calls.flatMap((call, index) => {
+    const name = call.function?.name;
+    if (!name) return [];
+    return [{
+      id: call.id ?? `openai-call-${index + 1}`,
+      name,
+      args: parseToolArgs(call.function?.arguments),
+    }];
+  });
+  return mapped.length > 0 ? mapped : undefined;
 }
 
 interface OpenAIStreamChunk {
@@ -132,9 +166,11 @@ export abstract class OpenAICompatibleAdapter implements ProviderAdapter {
     const text = Array.isArray(firstContent)
       ? firstContent.map((item) => item.text || "").join("")
       : (firstContent ?? "");
+    const toolCalls = extractToolCalls(json);
 
     return {
       text,
+      ...(toolCalls && { toolCalls }),
       usage: json.usage
         ? {
             promptTokens: json.usage.prompt_tokens ?? 0,

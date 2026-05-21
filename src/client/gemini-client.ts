@@ -11,6 +11,7 @@ import type {
   ClientOptions,
   TokenUsage,
   ImagePart,
+  ToolCall,
 } from "./types.js";
 import { StreamInterruptedError } from "./types.js";
 
@@ -37,6 +38,37 @@ function buildHistory(history: ChatMessage[]) {
     role: msg.role,
     parts: [{ text: msg.parts }],
   }));
+}
+
+interface GeminiFunctionCallPart {
+  functionCall?: {
+    name?: string;
+    args?: object;
+  };
+}
+
+interface GeminiToolCallResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: GeminiFunctionCallPart[];
+    };
+  }>;
+}
+
+function extractToolCalls(response: GeminiToolCallResponse): ToolCall[] | undefined {
+  const calls: ToolCall[] = [];
+  for (const candidate of response.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      const call = part.functionCall;
+      if (!call?.name) continue;
+      calls.push({
+        id: `gemini-call-${calls.length + 1}`,
+        name: call.name,
+        args: call.args ? { ...(call.args as Record<string, unknown>) } : {},
+      });
+    }
+  }
+  return calls.length > 0 ? calls : undefined;
 }
 
 /**
@@ -189,7 +221,8 @@ export class GeminiClient {
 
       const text = response.text();
       const usage = extractUsage(response);
-      return { text, usage };
+      const toolCalls = extractToolCalls(response);
+      return { text, usage, ...(toolCalls && { toolCalls }) };
     } catch (err) {
       failed = true;
       if (

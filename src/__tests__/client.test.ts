@@ -82,10 +82,15 @@ function makePool(keys: ApiKey[]): KeyPool {
   return new KeyPool(adapter);
 }
 
-function makeSuccessResponse(text: string, usage = true) {
+function makeSuccessResponse(
+  text: string,
+  usage = true,
+  candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }>
+) {
   return {
     response: {
       text: () => text,
+      candidates,
       usageMetadata: usage
         ? { promptTokenCount: 10, candidatesTokenCount: 20, totalTokenCount: 30 }
         : undefined,
@@ -117,6 +122,30 @@ describe("GeminiClient.generateContent", () => {
       completionTokens: 20,
       totalTokens: 30,
     });
+  });
+
+  it("surfaces Gemini functionCall parts as toolCalls", async () => {
+    const { __mocks } = await import("@google/generative-ai") as any;
+    __mocks.mockGenerate.mockResolvedValue(makeSuccessResponse("", true, [
+      {
+        content: {
+          parts: [
+            { functionCall: { name: "lookup_car", args: { id: "A123" } } },
+          ],
+        },
+      },
+    ]));
+
+    const pool = makePool([makeKey(1, "key-a")]);
+    const client = new GeminiClient(pool);
+    const result = await client.generateContent({
+      model: "gemini-2.5-flash",
+      prompt: "call tool",
+    });
+
+    expect(result.toolCalls).toEqual([
+      { id: "gemini-call-1", name: "lookup_car", args: { id: "A123" } },
+    ]);
   });
 
   it("passes systemInstruction to getGenerativeModel", async () => {

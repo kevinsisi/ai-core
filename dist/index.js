@@ -3,16 +3,18 @@ import {
 } from "./chunk-4KJMSVMU.js";
 import {
   MultiProviderClient
-} from "./chunk-MAVQAFC7.js";
+} from "./chunk-QFUJCX56.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-G3T2IHKX.js";
+} from "./chunk-PES4O5RC.js";
 import {
+  CapabilityNotSupportedError,
   GeminiClient,
+  MaxToolRoundsExceededError,
   ProviderRouter,
   StreamInterruptedError,
   builtInProviders,
@@ -27,7 +29,7 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-2OJQQQNV.js";
+} from "./chunk-HKNTXQ2A.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -56,21 +58,23 @@ import {
   isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "./chunk-2AM2WEL7.js";
+} from "./chunk-BH7KXBLP.js";
 import {
   ProviderID
-} from "./chunk-ROU2NLPU.js";
+} from "./chunk-GSINE2EE.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.2.0";
+var AI_CORE_VERSION = "3.4.0";
 export {
   AI_CORE_VERSION,
   AgentRuntime,
+  CapabilityNotSupportedError,
   GeminiClient,
   GeminiProviderAdapter,
   KeyPool,
   LeaseHeartbeat,
   MaxRetriesExceededError,
+  MaxToolRoundsExceededError,
   MultiProviderClient,
   NoAvailableKeyError,
   OpenAICompatibleAdapter,

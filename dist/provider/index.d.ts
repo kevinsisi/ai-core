@@ -1,12 +1,12 @@
-import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-DG3Ftj0c.js';
-export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-DG3Ftj0c.js';
+import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-ynO_vevS.js';
+export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-ynO_vevS.js';
 export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './auth/index.js';
-import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-DugyBUTm.js';
-export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-DugyBUTm.js';
+import { P as ProviderAdapter, G as GenerateParams, e as GenerateResponse, c as ChatToolContext, a as ChatEvent, I as ImageGenParams, f as ImageGenResponse } from '../router-21U47fAK.js';
+export { h as ProviderRouter, R as RoutePolicy, l as RoutedExecution, i as RoutedProviderSelection, m as RoutedStream } from '../router-21U47fAK.js';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.js';
 
 declare const builtInProviders: ProviderDefinition[];
-declare const defaultProviderPriority: readonly ["openai", "gemini"];
+declare const defaultProviderPriority: readonly ["opencode", "gemini", "openai"];
 declare function getBuiltInProvider(providerID: string): ProviderDefinition | undefined;
 declare function getBuiltInModel(modelID: string): ModelDefinition | undefined;
 /**
@@ -30,11 +30,39 @@ declare class GeminiProviderAdapter implements ProviderAdapter {
     readonly provider: ProviderDefinition;
     readonly credential: PoolCredential;
     private readonly client;
+    private readonly pool;
+    private readonly maxRetries;
     constructor(pool: KeyPool, maxRetries?: number);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
     streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
+    /**
+     * Streaming chat with native Gemini function-calling. Loop runs inside
+     * the adapter: the model stream is consumed, `functionCalls()` are turned
+     * into ChatEvents and dispatched to `ctx.onToolCall`, results are pushed
+     * back as `FunctionResponsePart`, and streaming continues. Caps at
+     * `ctx.maxToolRounds ?? 5` rounds; throws `MaxToolRoundsExceededError`
+     * if the model keeps invoking tools past the cap.
+     *
+     * Preserves the v2.22.x "empty chunk after function call" SDK quirk:
+     * when the post-tool-call stream produces no text chunks, the aggregated
+     * `result.response.text()` is emitted as a single `text_delta`.
+     */
+    chatWithTools(params: GenerateParams, ctx: ChatToolContext): AsyncIterable<ChatEvent>;
+    /**
+     * Image generation via Gemini's `responseModalities: ['IMAGE', 'TEXT']`
+     * mode. Two model attempts max (`params.model` then `options.fallbackModel`)
+     * — only the model-not-found-class error triggers the fallback; other
+     * errors propagate immediately.
+     *
+     * `options.dedicatedKey` bypasses the pool entirely: a one-off
+     * `GoogleGenerativeAI` client is constructed, no retry beyond the
+     * fallback-model attempt, and the pool is left untouched. Used by
+     * sheet-to-car's plate-redaction "paid key" pattern.
+     */
+    imageGen(params: ImageGenParams): Promise<ImageGenResponse>;
+    private executeWithPool;
 }
 
 type OpenAICompatibleCredential = ApiKeyCredential | OAuthCredential;
@@ -174,6 +202,19 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
     streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown>;
+    /**
+     * Streaming chat with tool-use orchestration. OpenCode's session API is
+     * one-shot request/response, so streaming here means: each round's full
+     * assistant text is emitted as a single `text_delta` event, then a
+     * `done` event closes the iterable.
+     *
+     * Function calling is implemented through the prompt: a tool description
+     * block is appended to the system prompt, and the model is instructed to
+     * emit `<tool_call>{...}</tool_call>` blocks. Each round, the adapter
+     * extracts those, dispatches via `ctx.onToolCall`, appends the result
+     * to the conversation, and sends the next message.
+     */
+    chatWithTools(params: GenerateParams, ctx: ChatToolContext): AsyncIterable<ChatEvent>;
     private resolveModel;
     private buildHeaders;
     private createSession;

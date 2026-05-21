@@ -1,8 +1,8 @@
 import { K as KeyPool } from '../key-pool-CQHu-T7W.cjs';
-import { a as ClientOptions, G as GenerateParams, b as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, e as RoutedProviderSelection, g as RoutedExecution, h as RoutedStream, d as ProviderRouter, f as Tool } from '../router-FLxYLuR4.cjs';
-export { C as ChatMessage, F as FunctionTool, c as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage } from '../router-FLxYLuR4.cjs';
+import { d as ClientOptions, G as GenerateParams, e as GenerateResponse, P as ProviderAdapter, R as RoutePolicy, i as RoutedProviderSelection, l as RoutedExecution, m as RoutedStream, I as ImageGenParams, f as ImageGenResponse, n as RoutedImageGen, c as ChatToolContext, a as ChatEvent, o as RoutedChat, h as ProviderRouter, j as Tool } from '../router-DLk_01Y9.cjs';
+export { C as CapabilityNotSupportedError, b as ChatMessage, F as FunctionTool, M as MaxToolRoundsExceededError, g as ProviderNativeTool, S as StreamInterruptedError, T as TokenUsage, k as ToolCall } from '../router-DLk_01Y9.cjs';
 import { Tool as Tool$1 } from '@google/generative-ai';
-import '../types-DG3Ftj0c.cjs';
+import '../types-ynO_vevS.cjs';
 
 /**
  * Thin wrapper around @google/generative-ai that handles:
@@ -65,6 +65,28 @@ declare class MultiProviderClient {
      */
     generateWithSelection(params: GenerateParams, policy?: RoutePolicy): Promise<RoutedExecution>;
     streamWithSelection(params: GenerateParams, policy?: RoutePolicy): RoutedStream;
+    /**
+     * Image generation. Routed to the first chain provider whose adapter
+     * implements `imageGen`; throws `CapabilityNotSupportedError` when no
+     * candidate supports it.
+     *
+     * The provider-specific options bag (`params.options`) is passed through
+     * verbatim — Gemini honors `{ fallbackModel, dedicatedKey }`; other
+     * adapters ignore.
+     */
+    imageGen(params: ImageGenParams, policy?: RoutePolicy): Promise<ImageGenResponse>;
+    imageGenWithSelection(params: ImageGenParams, policy?: RoutePolicy): Promise<RoutedImageGen>;
+    /**
+     * Streaming chat with provider-specific function-call loop. Provider is
+     * selected once at the start of the call; mid-loop provider fallback is
+     * not supported (chat state lives inside the adapter's session).
+     *
+     * Caller supplies `ctx.onToolCall` to execute tools the model invokes;
+     * the adapter feeds results back into the next round. The loop is capped
+     * by `ctx.maxToolRounds` (default 5).
+     */
+    chatWithTools(params: GenerateParams, ctx: ChatToolContext, policy?: RoutePolicy): AsyncIterable<ChatEvent>;
+    chatWithToolsAndSelection(params: GenerateParams, ctx: ChatToolContext, policy?: RoutePolicy): RoutedChat;
     getRouter(): ProviderRouter;
 }
 
@@ -95,4 +117,4 @@ declare function toGeminiTools(tools: Tool[] | undefined): Tool$1[] | undefined;
  */
 declare function toOpenAITools(tools: Tool[] | undefined, nativeToolProvider?: string): Array<Record<string, unknown>> | undefined;
 
-export { ClientOptions, GeminiClient, GenerateParams, GenerateResponse, MultiProviderClient, type MultiProviderClientOptions, Tool, toGeminiTools, toOpenAITools };
+export { ChatEvent, ChatToolContext, ClientOptions, GeminiClient, GenerateParams, GenerateResponse, ImageGenParams, ImageGenResponse, MultiProviderClient, type MultiProviderClientOptions, Tool, toGeminiTools, toOpenAITools };

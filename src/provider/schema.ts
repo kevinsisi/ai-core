@@ -4,6 +4,7 @@
  * so consumers can pass any registered id without widening casts.
  */
 export const ProviderID = {
+  OpenCode: "opencode",
   Gemini: "gemini",
   OpenAI: "openai",
   OpenRouter: "openrouter",
@@ -19,6 +20,7 @@ export interface ProviderCapabilities {
   reasoning: boolean;
   multimodalInput: boolean;
   multimodalOutput: boolean;
+  imageOutput?: boolean;
 }
 
 export interface ModelDefinition {

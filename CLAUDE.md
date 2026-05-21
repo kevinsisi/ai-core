@@ -2,7 +2,7 @@
 
 ## 專案用途
 
-共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware multi-provider runtime（Gemini / OpenAI / OpenRouter / OpenCode session API / 自訂 provider）、OpenAI-first routing、Gemini 相容層、per-provider 錯誤分類 retry、`MultiProviderClient` 與 `GeminiClient` 兩條入口，以及 provider-agnostic tool schema。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
+共用 AI 基礎模組，供 HomeProject 各服務引用。提供 provider-aware multi-provider runtime（OpenCode session API / Gemini / OpenAI / OpenRouter / 自訂 provider）、OpenCode-first routing、Gemini fallback/相容層、per-provider 錯誤分類 retry、`MultiProviderClient` 與 `GeminiClient` 兩條入口，以及 provider-agnostic tool schema。發布至 GitHub Packages，消費者透過 `git+https://` 或 `npm install @kevinsisi/ai-core` 引用。
 
 **消費者專案：** mind-diary、project-bridge、auto-spec-test、sheet-to-car
 
@@ -94,7 +94,7 @@ const { text } = await client.generateContent({
 
 ### MultiProviderClient
 
-多 provider 入口，依 model id 透過 `ProviderRouter` 選 provider 並分派 `generateContent` / `streamContent`。預設 provider 優先序為 OpenAI → Gemini → OpenRouter，可由消費者用 routing policy 調整或注入自訂 provider：
+多 provider 入口，依 model id 透過 `ProviderRouter` 選 provider 並分派 `generateContent` / `streamContent`。預設 provider 優先序為 OpenCode → Gemini → OpenAI，可由消費者用 routing policy 調整或注入自訂 provider：
 
 ```ts
 import { MultiProviderClient } from '@kevinsisi/ai-core/client';
@@ -146,9 +146,9 @@ const { text } = await client.generateContent({
 - 所有公開 API 必須有明確的型別定義，不可依賴推斷的回傳型別
 
 ### Provider / 模型選擇
-- provider-aware routing 預設採 **OpenAI-first, Gemini-backup**
+- provider-aware routing 預設採 **OpenCode-first, Gemini-backup, OpenAI third**
 - 既有 Gemini-only 相容 API 仍保留，不強迫立即遷移
-- 不可在 provider-aware 路由中靜默 fallback；跨 model/provider 必須由顯式 policy 開啟
+- 不可在 provider-aware 路由中靜默 fallback；跨 model/provider 與 provider 執行失敗後重試必須由顯式 policy 開啟
 - 消費者透過 routing policy 與 model id 決定最終 provider/model
 
 ### 其他約束
@@ -158,7 +158,7 @@ const { text } = await client.generateContent({
 - Provider adapters 可接受 consumer-supplied provider-specific credentials（OpenAI / OpenRouter / 自訂 provider 透過 `registerProvider` 註冊），但仍不得硬編碼在 library 內。
 - `console.*` 僅允許 `console.warn` / `console.error`，不可用 `console.log`
 - `step-orchestration` 只提供 generic orchestration primitives，不可吸收 consumer app 的 prompt wording、domain rule、或 product workflow decision
-- provider-aware routing 必須維持既有 Gemini-only consumer 的 no-silent-fallback 契約；Gemini adapter 為 pool-backed compatibility adapter，OpenAI 為預設優先 provider，跨 model/provider fallback 必須由顯式 routing policy 開啟
+- provider-aware routing 必須維持既有 Gemini-only consumer 的 no-silent-fallback 契約；Gemini adapter 為 pool-backed compatibility adapter，OpenCode 為預設優先 provider，跨 model/provider fallback 必須由顯式 routing policy 開啟
 
 ---
 
