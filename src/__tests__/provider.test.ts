@@ -62,16 +62,22 @@ function makeAdapter(keys: ApiKey[]): StorageAdapter {
 describe("provider registry", () => {
   afterEach(() => clearRegisteredProviders());
 
-  it("exposes built-in Gemini and OpenAI providers", () => {
+  it("exposes built-in OpenCode, Gemini, and OpenAI providers", () => {
+    expect(getBuiltInProvider(ProviderID.OpenCode)?.id).toBe("opencode");
     expect(getBuiltInProvider(ProviderID.Gemini)?.id).toBe("gemini");
     expect(getBuiltInProvider(ProviderID.OpenAI)?.id).toBe("openai");
   });
 
-  it("uses OpenAI first and Gemini second in default provider priority", () => {
-    expect(defaultProviderPriority).toEqual([ProviderID.OpenAI, ProviderID.Gemini]);
+  it("uses OpenCode first and Gemini second in default provider priority", () => {
+    expect(defaultProviderPriority).toEqual([
+      ProviderID.OpenCode,
+      ProviderID.Gemini,
+      ProviderID.OpenAI,
+    ]);
   });
 
   it("resolves built-in models", () => {
+    expect(getBuiltInModel("opencode/deepseek-v4-flash-free")?.provider).toBe("opencode");
     expect(getBuiltInModel("gemini-2.5-flash")?.provider).toBe("gemini");
     expect(getBuiltInModel("gpt-4.1-mini")?.provider).toBe("openai");
   });
@@ -153,10 +159,10 @@ describe("provider router", () => {
     expect(selected).toEqual({ provider: "openai", model: "gpt-4.1-mini", credentialType: "api", credentialRef: "openai-default" });
   });
 
-  it("uses OpenAI-first priority by default when preferredProviders is omitted", () => {
+  it("uses OpenCode-first then Gemini priority by default when preferredProviders is omitted", () => {
     const router = new ProviderRouter([geminiAdapter, openAIAdapter]);
     const selected = router.select();
-    expect(selected).toEqual({ provider: "openai", model: "gpt-4.1-mini", credentialType: "api", credentialRef: "openai-default" });
+    expect(selected).toEqual({ provider: "gemini", model: "gemini-2.5-flash", credentialType: "pool", credentialRef: "pool" });
   });
 
   it("can fall back across providers only when policy allows it", () => {
@@ -591,8 +597,10 @@ describe("openrouter provider adapter", () => {
 describe("opencode provider adapter", () => {
   it("creates a session with the selected model and sends a prompt to that session", async () => {
     const calls: Array<{ url: string; body: Record<string, unknown>; headers: Record<string, string> }> = [];
-    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
-      calls.push({ url, headers: init.headers, body: JSON.parse(init.body) as Record<string, unknown> });
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string>; body?: string }) => {
+      if (init.body) {
+        calls.push({ url, headers: init.headers, body: JSON.parse(init.body) as Record<string, unknown> });
+      }
       if (url.endsWith("/session")) {
         return {
           ok: true,
@@ -651,6 +659,18 @@ describe("opencode provider adapter", () => {
 
     expect(adapter.supports("gpt-5.5-mini")).toBe(true);
     expect(adapter.getModel("gpt-5.5-mini")?.id).toBe("openai/gpt-5.5-mini");
+  });
+
+  it("does not claim unprefixed built-in models owned by other providers", async () => {
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "pool", provider: "opencode" },
+      { defaultModel: { providerID: "openai", id: "gpt-5.4-mini" } }
+    );
+
+    expect(adapter.supports("gemini-2.5-flash")).toBe(false);
+    expect(adapter.supports("gpt-4.1-mini")).toBe(false);
+    expect(adapter.getModel("gemini-2.5-flash")).toBeUndefined();
+    expect(adapter.getModel("gpt-4.1-mini")).toBeUndefined();
   });
 
   it("deletes the session after generateContent completes", async () => {

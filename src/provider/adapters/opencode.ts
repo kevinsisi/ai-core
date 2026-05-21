@@ -55,6 +55,7 @@
 import { readFile } from "node:fs/promises";
 import type { GenerateParams, GenerateResponse, ImagePart } from "../../client/types.js";
 import type { ApiKeyCredential, OAuthCredential, PoolCredential } from "../auth/index.js";
+import { getBuiltInModel } from "../models.js";
 import type { ModelDefinition, ProviderDefinition } from "../schema.js";
 import type { ProviderAdapter } from "../types.js";
 
@@ -148,11 +149,13 @@ function modelToPayload(model: OpenCodeModelRef): OpenCodeModelPayload {
   return { modelID: model.id, providerID: model.providerID };
 }
 
-function parseModelRef(modelID: string, defaultProviderID: string): OpenCodeModelRef {
+function parseModelRef(modelID: string, defaultProviderID: string): OpenCodeModelRef | undefined {
   const sep = modelID.indexOf("/");
   if (sep > 0 && sep < modelID.length - 1) {
     return { providerID: modelID.slice(0, sep), id: modelID.slice(sep + 1) };
   }
+  const builtInModel = getBuiltInModel(modelID);
+  if (builtInModel && builtInModel.provider !== "opencode") return undefined;
   return { providerID: defaultProviderID, id: modelID };
 }
 
@@ -270,7 +273,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
 
   private resolveModel(modelID: string): OpenCodeModelRef | undefined {
     const model = parseModelRef(modelID, this.defaultModel.providerID);
-    if (!model.id || !model.providerID) return undefined;
+    if (!model?.id || !model.providerID) return undefined;
     return model;
   }
 

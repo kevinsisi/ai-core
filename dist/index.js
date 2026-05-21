@@ -3,14 +3,14 @@ import {
 } from "./chunk-4KJMSVMU.js";
 import {
   MultiProviderClient
-} from "./chunk-MAVQAFC7.js";
+} from "./chunk-DICXPDKM.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-G3T2IHKX.js";
+} from "./chunk-APK7GCMC.js";
 import {
   GeminiClient,
   ProviderRouter,
@@ -27,7 +27,7 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-2OJQQQNV.js";
+} from "./chunk-YHN7UO6G.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -56,10 +56,10 @@ import {
   isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "./chunk-2AM2WEL7.js";
+} from "./chunk-YQWCSAAW.js";
 import {
   ProviderID
-} from "./chunk-ROU2NLPU.js";
+} from "./chunk-LMNJWRO5.js";
 
 // src/version.ts
 var AI_CORE_VERSION = "3.2.0";

@@ -1,4 +1,4 @@
-import { e as ProviderDefinition, d as ProviderCredential, M as ModelDefinition, f as ProviderID, c as ProviderCapabilities } from './types-DG3Ftj0c.js';
+import { e as ProviderDefinition, d as ProviderCredential, M as ModelDefinition, f as ProviderID, c as ProviderCapabilities } from './types-6qrHJZyy.js';
 
 interface ChatMessage {
     role: "user" | "model";
@@ -140,6 +140,9 @@ declare class ProviderRouter {
      */
     executeStream(params: GenerateParams, policy?: RoutePolicy): RoutedStream;
     private selectAdapter;
+    private selectAdapterCandidates;
+    private selectFallbackCandidates;
+    private canTryNextCandidate;
 }
 
 export { type ChatMessage as C, type FunctionTool as F, type GenerateParams as G, type ProviderAdapter as P, type RoutePolicy as R, StreamInterruptedError as S, type TokenUsage as T, type ClientOptions as a, type GenerateResponse as b, type ProviderNativeTool as c, ProviderRouter as d, type RoutedProviderSelection as e, type Tool as f, type RoutedExecution as g, type RoutedStream as h };

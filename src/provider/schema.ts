@@ -4,6 +4,7 @@
  * so consumers can pass any registered id without widening casts.
  */
 export const ProviderID = {
+  OpenCode: "opencode",
   Gemini: "gemini",
   OpenAI: "openai",
   OpenRouter: "openrouter",

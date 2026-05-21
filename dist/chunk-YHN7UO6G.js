@@ -3,7 +3,7 @@ import {
 } from "./chunk-YUQCRD55.js";
 import {
   ProviderID
-} from "./chunk-ROU2NLPU.js";
+} from "./chunk-LMNJWRO5.js";
 
 // src/client/tool-conversion.ts
 function toGeminiTools(tools) {
@@ -314,7 +314,28 @@ var openRouterModels = [
     costTier: "medium"
   }
 ];
+var openCodeModels = [
+  {
+    id: "opencode/deepseek-v4-flash-free",
+    provider: ProviderID.OpenCode,
+    name: "OpenCode DeepSeek V4 Flash Free",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: false
+    },
+    costTier: "low"
+  }
+];
 var builtInProviders = [
+  {
+    id: ProviderID.OpenCode,
+    name: "OpenCode",
+    authTypes: ["api", "oauth", "pool"],
+    models: openCodeModels
+  },
   {
     id: ProviderID.OpenAI,
     name: "OpenAI",
@@ -334,7 +355,7 @@ var builtInProviders = [
     models: openRouterModels
   }
 ];
-var defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini];
+var defaultProviderPriority = [ProviderID.OpenCode, ProviderID.Gemini, ProviderID.OpenAI];
 function getBuiltInProvider(providerID) {
   return builtInProviders.find((provider) => provider.id === providerID);
 }
@@ -419,9 +440,21 @@ var ProviderRouter = class {
       ...policy,
       preferredModel: policy.preferredModel ?? params.model
     };
-    const { adapter, selection } = this.selectAdapter(effectivePolicy);
-    const response = await adapter.generateContent({ ...params, model: selection.model });
-    return { selection, response };
+    const candidates = this.selectAdapterCandidates(effectivePolicy);
+    let lastError;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const { adapter, selection } = candidates[index];
+      try {
+        const response = await adapter.generateContent({ ...params, model: selection.model });
+        return { selection, response };
+      } catch (err) {
+        lastError = err;
+        if (!this.canTryNextCandidate(candidates, index, effectivePolicy)) {
+          throw err;
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Provider execution failed");
   }
   /**
    * Mirror of execute() for streaming. Selection runs eagerly so the caller
@@ -438,6 +471,13 @@ var ProviderRouter = class {
     return { selection, stream };
   }
   selectAdapter(policy) {
+    const [candidate] = this.selectAdapterCandidates(policy);
+    if (!candidate) {
+      throw new Error("No provider/model combination matches the routing policy");
+    }
+    return candidate;
+  }
+  selectAdapterCandidates(policy) {
     const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
@@ -449,7 +489,11 @@ var ProviderRouter = class {
       seen.add(providerID);
       return true;
     });
+    const preferredBuiltInModel = policy.preferredModel ? getBuiltInModel(policy.preferredModel) : void 0;
     for (const providerID of uniqueProviders) {
+      if (preferredBuiltInModel && preferredBuiltInModel.provider !== providerID && !policy.allowCrossProviderFallback) {
+        continue;
+      }
       const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
       if (providerAdapters.length === 0) continue;
       const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
@@ -457,7 +501,7 @@ var ProviderRouter = class {
         if (policy.preferredModel) {
           const model = adapter.getModel(policy.preferredModel);
           if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
-            return {
+            const candidate2 = {
               adapter,
               selection: {
                 provider: providerID,
@@ -466,6 +510,13 @@ var ProviderRouter = class {
                 credentialRef: credentialRef(adapter)
               }
             };
+            if (!policy.allowCrossProviderFallback && !policy.allowSameProviderCredentialFallback) {
+              return [candidate2];
+            }
+            return [
+              candidate2,
+              ...this.selectFallbackCandidates(policy, uniqueProviders, providerID, adapter)
+            ];
           }
           if (!policy.allowCrossModelFallback) {
             continue;
@@ -477,7 +528,7 @@ var ProviderRouter = class {
         if (models.length === 0) {
           continue;
         }
-        return {
+        const candidate = {
           adapter,
           selection: {
             provider: providerID,
@@ -486,9 +537,66 @@ var ProviderRouter = class {
             credentialRef: credentialRef(adapter)
           }
         };
+        if (!policy.allowCrossProviderFallback && !policy.allowSameProviderCredentialFallback) {
+          return [candidate];
+        }
+        return [
+          candidate,
+          ...this.selectFallbackCandidates(policy, uniqueProviders, providerID, adapter)
+        ];
       }
     }
     throw new Error("No provider/model combination matches the routing policy");
+  }
+  selectFallbackCandidates(policy, orderedProviders, selectedProviderID, selectedAdapter) {
+    const candidates = [];
+    for (const providerID of orderedProviders) {
+      const providerChanged = providerID !== selectedProviderID;
+      if (providerChanged && !policy.allowCrossProviderFallback) continue;
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const adaptersToTry = policy.allowSameProviderCredentialFallback ? providerAdapters : providerAdapters.slice(0, 1);
+      for (const adapter of adaptersToTry) {
+        if (adapter === selectedAdapter) continue;
+        if (!providerChanged && !policy.allowSameProviderCredentialFallback) continue;
+        const model = policy.preferredModel ? adapter.getModel(policy.preferredModel) : void 0;
+        if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
+          candidates.push({
+            adapter,
+            selection: {
+              provider: providerID,
+              model: model.id,
+              credentialType: adapter.credential.type,
+              credentialRef: credentialRef(adapter)
+            }
+          });
+          continue;
+        }
+        if (policy.preferredModel && !policy.allowCrossModelFallback) continue;
+        const [fallbackModel] = adapter.provider.models.filter(
+          (item) => adapter.supports(item.id) && matchesCapabilities(item, policy.requiredCapabilities)
+        );
+        if (!fallbackModel) continue;
+        candidates.push({
+          adapter,
+          selection: {
+            provider: providerID,
+            model: fallbackModel.id,
+            credentialType: adapter.credential.type,
+            credentialRef: credentialRef(adapter)
+          }
+        });
+      }
+    }
+    return candidates;
+  }
+  canTryNextCandidate(candidates, currentIndex, policy) {
+    const current = candidates[currentIndex];
+    const next = candidates[currentIndex + 1];
+    if (!current || !next) return false;
+    if (current.selection.provider !== next.selection.provider) {
+      return policy.allowCrossProviderFallback === true;
+    }
+    return policy.allowSameProviderCredentialFallback === true;
   }
 };
 
@@ -509,4 +617,4 @@ export {
   listRegisteredProviders,
   ProviderRouter
 };
-//# sourceMappingURL=chunk-2OJQQQNV.js.map
+//# sourceMappingURL=chunk-YHN7UO6G.js.map

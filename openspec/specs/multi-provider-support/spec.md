@@ -46,6 +46,24 @@ The provider-aware routing layer SHALL select provider and model before applying
 - **WHEN** a Gemini key pool is exhausted or inappropriate for the task
 - **THEN** the routing layer SHALL be able to choose another model or provider according to explicit policy, instead of only rotating Gemini keys
 
+### Requirement: provider-aware defaults SHALL prefer OpenCode before Gemini
+The provider-aware routing layer SHALL prefer OpenCode before Gemini by default for non-image generation when an OpenCode adapter is available.
+
+#### Scenario: default provider priority
+- **WHEN** no routing policy overrides provider order
+- **THEN** the default provider priority SHALL start with OpenCode
+- **AND** Gemini SHALL be the next fallback provider
+
+#### Scenario: OpenCode execution failure with explicit fallback policy
+- **WHEN** OpenCode is selected and its execution fails
+- **AND** the routing policy explicitly allows cross-provider and cross-model fallback
+- **THEN** the router SHALL try the next compatible provider in policy order
+
+#### Scenario: OpenCode execution failure without fallback policy
+- **WHEN** OpenCode is selected and its execution fails
+- **AND** the routing policy does not explicitly allow cross-provider fallback
+- **THEN** the original OpenCode failure SHALL be surfaced
+
 ### Requirement: ai-core SHALL NOT silently change provider/model for existing Gemini-first consumers
 Provider-aware fallback SHALL be explicit and policy-driven. Existing Gemini-first APIs SHALL keep their current no-silent-fallback behavior unless the caller opts into provider-aware routing.
 

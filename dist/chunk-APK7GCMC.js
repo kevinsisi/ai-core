@@ -4,10 +4,10 @@ import {
   getBuiltInModel,
   getBuiltInProvider,
   toOpenAITools
-} from "./chunk-2OJQQQNV.js";
+} from "./chunk-YHN7UO6G.js";
 import {
   ProviderID
-} from "./chunk-ROU2NLPU.js";
+} from "./chunk-LMNJWRO5.js";
 
 // src/provider/adapters/gemini.ts
 function isLikelyGeminiModel(modelID) {
@@ -251,6 +251,8 @@ function parseModelRef(modelID, defaultProviderID) {
   if (sep > 0 && sep < modelID.length - 1) {
     return { providerID: modelID.slice(0, sep), id: modelID.slice(sep + 1) };
   }
+  const builtInModel = getBuiltInModel(modelID);
+  if (builtInModel && builtInModel.provider !== "opencode") return void 0;
   return { providerID: defaultProviderID, id: modelID };
 }
 function synthesizeModel(model) {
@@ -344,7 +346,7 @@ var OpenCodeProviderAdapter = class {
   // ── Private helpers ──────────────────────────────────────────────────────
   resolveModel(modelID) {
     const model = parseModelRef(modelID, this.defaultModel.providerID);
-    if (!model.id || !model.providerID) return void 0;
+    if (!model?.id || !model.providerID) return void 0;
     return model;
   }
   buildHeaders() {
@@ -442,4 +444,4 @@ export {
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-G3T2IHKX.js.map
+//# sourceMappingURL=chunk-APK7GCMC.js.map

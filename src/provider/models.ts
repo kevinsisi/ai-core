@@ -54,7 +54,29 @@ const openRouterModels = [
   },
 ];
 
+const openCodeModels = [
+  {
+    id: "opencode/deepseek-v4-flash-free",
+    provider: ProviderID.OpenCode,
+    name: "OpenCode DeepSeek V4 Flash Free",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: false,
+    },
+    costTier: "low" as const,
+  },
+];
+
 export const builtInProviders: ProviderDefinition[] = [
+  {
+    id: ProviderID.OpenCode,
+    name: "OpenCode",
+    authTypes: ["api", "oauth", "pool"],
+    models: openCodeModels,
+  },
   {
     id: ProviderID.OpenAI,
     name: "OpenAI",
@@ -75,7 +97,7 @@ export const builtInProviders: ProviderDefinition[] = [
   },
 ];
 
-export const defaultProviderPriority = [ProviderID.OpenAI, ProviderID.Gemini] as const;
+export const defaultProviderPriority = [ProviderID.OpenCode, ProviderID.Gemini, ProviderID.OpenAI] as const;
 
 export function getBuiltInProvider(providerID: string) {
   return builtInProviders.find((provider) => provider.id === providerID);

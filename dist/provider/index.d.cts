@@ -1,12 +1,12 @@
-import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-DG3Ftj0c.cjs';
-export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-DG3Ftj0c.cjs';
+import { e as ProviderDefinition, M as ModelDefinition, P as PoolCredential, A as ApiKeyCredential, O as OAuthCredential } from '../types-6qrHJZyy.cjs';
+export { a as ModelID, b as ProviderAuthType, c as ProviderCapabilities, d as ProviderCredential, f as ProviderID, i as isOAuthCredentialExpired } from '../types-6qrHJZyy.cjs';
 export { OpenAIOAuthError, StartOpenAIAuthOptions, refreshOpenAIToken, startOpenAIAuth } from './auth/index.cjs';
-import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-FLxYLuR4.cjs';
-export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-FLxYLuR4.cjs';
+import { P as ProviderAdapter, G as GenerateParams, b as GenerateResponse } from '../router-j7vFW12w.cjs';
+export { d as ProviderRouter, R as RoutePolicy, g as RoutedExecution, e as RoutedProviderSelection, h as RoutedStream } from '../router-j7vFW12w.cjs';
 import { K as KeyPool } from '../key-pool-CQHu-T7W.cjs';
 
 declare const builtInProviders: ProviderDefinition[];
-declare const defaultProviderPriority: readonly ["openai", "gemini"];
+declare const defaultProviderPriority: readonly ["opencode", "gemini", "openai"];
 declare function getBuiltInProvider(providerID: string): ProviderDefinition | undefined;
 declare function getBuiltInModel(modelID: string): ModelDefinition | undefined;
 /**

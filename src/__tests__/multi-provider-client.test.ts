@@ -32,6 +32,20 @@ function makeGeminiAdapter(overrides: Partial<ProviderAdapter> = {}): ProviderAd
   };
 }
 
+function makeOpenCodeAdapter(overrides: Partial<ProviderAdapter> = {}): ProviderAdapter {
+  const provider = getBuiltInProvider("opencode")!;
+  const model = provider.models[0];
+  return {
+    provider,
+    credential: { type: "pool", provider: "opencode", credentialLabel: "opencode-test" },
+    supports: (id) => id === model.id,
+    getModel: (id) => (id === model.id ? model : undefined),
+    generateContent: async () => ({ text: "opencode", usage: null }),
+    streamContent: () => emptyStream(),
+    ...overrides,
+  };
+}
+
 describe("MultiProviderClient", () => {
   it("routes generateContent to the matching adapter and returns its response", async () => {
     const calls: GenerateParams[] = [];
@@ -78,6 +92,68 @@ describe("MultiProviderClient", () => {
       { preferredProviders: ["openai"] }
     );
     expect(result.selection.provider).toBe("openai");
+  });
+
+  it("prefers OpenCode before Gemini by default", async () => {
+    const client = new MultiProviderClient({
+      adapters: [makeGeminiAdapter(), makeOpenCodeAdapter()],
+    });
+
+    const result = await client.generateWithSelection({
+      model: "opencode/deepseek-v4-flash-free",
+      prompt: "hi",
+    });
+
+    expect(result.selection.provider).toBe("opencode");
+    expect(result.response.text).toBe("opencode");
+  });
+
+  it("falls back from OpenCode to Gemini when policy allows provider and model fallback", async () => {
+    const opencode = makeOpenCodeAdapter({
+      generateContent: async () => {
+        throw new Error("OpenCode unavailable");
+      },
+    });
+    const gemini = makeGeminiAdapter({
+      generateContent: async () => ({ text: "gemini fallback", usage: null }),
+    });
+    const client = new MultiProviderClient({ adapters: [opencode, gemini] });
+
+    const result = await client.generateWithSelection(
+      { model: "opencode/deepseek-v4-flash-free", prompt: "hi" },
+      { allowCrossProviderFallback: true, allowCrossModelFallback: true }
+    );
+
+    expect(result.selection.provider).toBe("gemini");
+    expect(result.selection.model).toBe("gemini-2.5-flash");
+    expect(result.response.text).toBe("gemini fallback");
+  });
+
+  it("does not fall back from OpenCode failure unless policy allows it", async () => {
+    const opencode = makeOpenCodeAdapter({
+      generateContent: async () => {
+        throw new Error("OpenCode unavailable");
+      },
+    });
+    const client = new MultiProviderClient({ adapters: [opencode, makeGeminiAdapter()] });
+
+    await expect(
+      client.generateContent({ model: "opencode/deepseek-v4-flash-free", prompt: "hi" })
+    ).rejects.toThrow("OpenCode unavailable");
+  });
+
+  it("does not treat cross-model fallback as permission to cross providers", async () => {
+    const client = new MultiProviderClient({
+      adapters: [makeOpenCodeAdapter(), makeGeminiAdapter()],
+    });
+
+    const result = await client.generateWithSelection(
+      { model: "gemini-2.5-flash", prompt: "hi" },
+      { allowCrossModelFallback: true }
+    );
+
+    expect(result.selection.provider).toBe("gemini");
+    expect(result.selection.model).toBe("gemini-2.5-flash");
   });
 
   it("streamContent yields adapter chunks", async () => {

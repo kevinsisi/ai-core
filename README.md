@@ -28,8 +28,8 @@ Provider-aware multi-provider AI runtime — 整合 OpenAI / OpenRouter / Gemini
 
 ### 架構原則
 
-- **不可靜默 fallback**：key 不足時 throw `NoAvailableKeyError`；跨 provider/model 切換必須由顯式 routing policy 開啟
-- **OpenAI-first routing**：預設 provider 優先序為 OpenAI → Gemini → OpenRouter
+- **不可靜默 fallback**：key 不足時 throw `NoAvailableKeyError`；跨 provider/model 切換與 provider 執行失敗後重試都必須由顯式 routing policy 開啟
+- **OpenCode-first routing**：預設 provider 優先序為 OpenCode → Gemini → OpenAI；非圖片 HomeProject AI 可用 OpenCode 優先、Gemini fallback，圖片生成仍由 Gemini capability path 負責
 - **Gemini 相容層保留**：既有 Gemini-only 消費者不必立即遷移
 - **`dist/` 必須 commit**：消費者透過 `git+https://` 安裝，不會在本地 build
 

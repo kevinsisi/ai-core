@@ -65,9 +65,23 @@ export class ProviderRouter {
       ...policy,
       preferredModel: policy.preferredModel ?? params.model,
     };
-    const { adapter, selection } = this.selectAdapter(effectivePolicy);
-    const response = await adapter.generateContent({ ...params, model: selection.model });
-    return { selection, response };
+    const candidates = this.selectAdapterCandidates(effectivePolicy);
+
+    let lastError: unknown;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const { adapter, selection } = candidates[index];
+      try {
+        const response = await adapter.generateContent({ ...params, model: selection.model });
+        return { selection, response };
+      } catch (err) {
+        lastError = err;
+        if (!this.canTryNextCandidate(candidates, index, effectivePolicy)) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error("Provider execution failed");
   }
 
   /**
@@ -89,6 +103,17 @@ export class ProviderRouter {
     adapter: ProviderAdapter;
     selection: RoutedProviderSelection;
   } {
+    const [candidate] = this.selectAdapterCandidates(policy);
+    if (!candidate) {
+      throw new Error("No provider/model combination matches the routing policy");
+    }
+    return candidate;
+  }
+
+  private selectAdapterCandidates(policy: RoutePolicy): Array<{
+    adapter: ProviderAdapter;
+    selection: RoutedProviderSelection;
+  }> {
     const preferredProviders = policy.preferredProviders ?? [...defaultProviderPriority];
     const orderedProviders = [
       ...preferredProviders,
@@ -102,7 +127,19 @@ export class ProviderRouter {
       return true;
     });
 
+    const preferredBuiltInModel = policy.preferredModel
+      ? getBuiltInModel(policy.preferredModel)
+      : undefined;
+
     for (const providerID of uniqueProviders) {
+      if (
+        preferredBuiltInModel &&
+        preferredBuiltInModel.provider !== providerID &&
+        !policy.allowCrossProviderFallback
+      ) {
+        continue;
+      }
+
       const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
       if (providerAdapters.length === 0) continue;
 
@@ -114,7 +151,7 @@ export class ProviderRouter {
         if (policy.preferredModel) {
           const model = adapter.getModel(policy.preferredModel);
           if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
-            return {
+            const candidate = {
               adapter,
               selection: {
                 provider: providerID,
@@ -123,6 +160,13 @@ export class ProviderRouter {
                 credentialRef: credentialRef(adapter),
               },
             };
+            if (!policy.allowCrossProviderFallback && !policy.allowSameProviderCredentialFallback) {
+              return [candidate];
+            }
+            return [
+              candidate,
+              ...this.selectFallbackCandidates(policy, uniqueProviders, providerID, adapter),
+            ];
           }
 
           if (!policy.allowCrossModelFallback) {
@@ -137,7 +181,7 @@ export class ProviderRouter {
           continue;
         }
 
-        return {
+        const candidate = {
           adapter,
           selection: {
             provider: providerID,
@@ -146,9 +190,93 @@ export class ProviderRouter {
             credentialRef: credentialRef(adapter),
           },
         };
+        if (!policy.allowCrossProviderFallback && !policy.allowSameProviderCredentialFallback) {
+          return [candidate];
+        }
+        return [
+          candidate,
+          ...this.selectFallbackCandidates(policy, uniqueProviders, providerID, adapter),
+        ];
       }
     }
 
     throw new Error("No provider/model combination matches the routing policy");
+  }
+
+  private selectFallbackCandidates(
+    policy: RoutePolicy,
+    orderedProviders: string[],
+    selectedProviderID: string,
+    selectedAdapter: ProviderAdapter
+  ): Array<{
+    adapter: ProviderAdapter;
+    selection: RoutedProviderSelection;
+  }> {
+    const candidates: Array<{
+      adapter: ProviderAdapter;
+      selection: RoutedProviderSelection;
+    }> = [];
+
+    for (const providerID of orderedProviders) {
+      const providerChanged = providerID !== selectedProviderID;
+      if (providerChanged && !policy.allowCrossProviderFallback) continue;
+
+      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const adaptersToTry = policy.allowSameProviderCredentialFallback
+        ? providerAdapters
+        : providerAdapters.slice(0, 1);
+
+      for (const adapter of adaptersToTry) {
+        if (adapter === selectedAdapter) continue;
+        if (!providerChanged && !policy.allowSameProviderCredentialFallback) continue;
+
+        const model = policy.preferredModel ? adapter.getModel(policy.preferredModel) : undefined;
+        if (model && matchesCapabilities(model, policy.requiredCapabilities)) {
+          candidates.push({
+            adapter,
+            selection: {
+              provider: providerID,
+              model: model.id,
+              credentialType: adapter.credential.type,
+              credentialRef: credentialRef(adapter),
+            },
+          });
+          continue;
+        }
+
+        if (policy.preferredModel && !policy.allowCrossModelFallback) continue;
+
+        const [fallbackModel] = adapter.provider.models.filter(
+          (item) => adapter.supports(item.id) && matchesCapabilities(item, policy.requiredCapabilities)
+        );
+        if (!fallbackModel) continue;
+
+        candidates.push({
+          adapter,
+          selection: {
+            provider: providerID,
+            model: fallbackModel.id,
+            credentialType: adapter.credential.type,
+            credentialRef: credentialRef(adapter),
+          },
+        });
+      }
+    }
+
+    return candidates;
+  }
+
+  private canTryNextCandidate(
+    candidates: Array<{ selection: RoutedProviderSelection }>,
+    currentIndex: number,
+    policy: RoutePolicy
+  ): boolean {
+    const current = candidates[currentIndex];
+    const next = candidates[currentIndex + 1];
+    if (!current || !next) return false;
+    if (current.selection.provider !== next.selection.provider) {
+      return policy.allowCrossProviderFallback === true;
+    }
+    return policy.allowSameProviderCredentialFallback === true;
   }
 }

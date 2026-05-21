@@ -52,6 +52,7 @@ var http = __toESM(require("http"), 1);
 
 // src/provider/schema.ts
 var ProviderID = {
+  OpenCode: "opencode",
   Gemini: "gemini",
   OpenAI: "openai",
   OpenRouter: "openrouter"
