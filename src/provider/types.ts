@@ -1,4 +1,4 @@
-import type { GenerateResponse, GenerateParams } from "../client/types.js";
+import type { GenerateResponse, GenerateParams, ImageGenParams, ImageGenResponse } from "../client/types.js";
 import type { ProviderCredential } from "./auth/index.js";
 import type { ModelDefinition, ProviderCapabilities, ProviderDefinition, ProviderID } from "./schema.js";
 
@@ -8,6 +8,7 @@ export interface ProviderAdapter {
   supports(modelID: string): boolean;
   getModel(modelID: string): ModelDefinition | undefined;
   generateContent(params: GenerateParams): Promise<GenerateResponse>;
+  imageGen?(params: ImageGenParams): Promise<ImageGenResponse>;
   /**
    * Stream incremental text chunks for a generation. Adapters that cannot
    * stream MUST throw rather than fall back to a buffered response — silent
@@ -24,6 +25,7 @@ export interface RoutePolicy {
   allowCrossModelFallback?: boolean;
   allowCrossProviderFallback?: boolean;
   requiredCapabilities?: Partial<ProviderCapabilities>;
+  requiredMethod?: "imageGen" | "chatWithTools";
 }
 
 export interface RoutedProviderSelection {

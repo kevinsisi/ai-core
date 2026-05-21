@@ -179,4 +179,94 @@ describe("MultiProviderClient", () => {
       client.generateContent({ model: "gemini-2.5-flash", prompt: "hi" })
     ).rejects.toThrow(/No provider\/model combination/);
   });
+
+  describe("imageGen", () => {
+    it("routes to the first adapter implementing imageGen", async () => {
+      const imageBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64");
+      const openCode = makeOpenCodeAdapter(); // no imageGen
+      const gemini = makeGeminiAdapter({
+        supports: (id) => id === "gemini-3-pro-image-preview",
+        getModel: (id) =>
+          id === "gemini-3-pro-image-preview"
+            ? getBuiltInProvider("gemini")!.models.find((m) => m.id === id)
+            : undefined,
+        imageGen: async () => ({
+          images: [{ mimeType: "image/png", data: imageBytes }],
+          usage: null,
+        }),
+      });
+
+      const client = new MultiProviderClient({
+        adapters: [openCode, gemini],
+        defaultPolicy: { preferredProviders: ["opencode", "gemini"] },
+      });
+      const result = await client.imageGen({
+        model: "gemini-3-pro-image-preview",
+        prompt: "draw a circle",
+      });
+      expect(result.images).toHaveLength(1);
+      expect(result.images[0].mimeType).toBe("image/png");
+    });
+
+    it("throws when no adapter in the chain supports imageGen", async () => {
+      const openCode = makeOpenCodeAdapter();
+      const client = new MultiProviderClient({
+        adapters: [openCode],
+      });
+      await expect(
+        client.imageGen({ model: "gemini-3-pro-image-preview", prompt: "x" })
+      ).rejects.toThrow();
+    });
+
+    it("invokes onSelect with the image-gen selection", async () => {
+      const onSelect = vi.fn();
+      const gemini = makeGeminiAdapter({
+        supports: (id) => id === "gemini-3-pro-image-preview",
+        getModel: (id) =>
+          id === "gemini-3-pro-image-preview"
+            ? getBuiltInProvider("gemini")!.models.find((m) => m.id === id)
+            : undefined,
+        imageGen: async () => ({
+          images: [{ mimeType: "image/png", data: "AA==" }],
+          usage: null,
+        }),
+      });
+
+      const client = new MultiProviderClient({ adapters: [gemini], onSelect });
+      await client.imageGen({ model: "gemini-3-pro-image-preview", prompt: "hi" });
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "gemini", model: "gemini-3-pro-image-preview" }),
+        expect.objectContaining({ prompt: "hi" })
+      );
+    });
+
+    it("skips adapters lacking imageGen and uses the next one in the chain", async () => {
+      const calls: string[] = [];
+      const openCode = makeOpenCodeAdapter({
+        // No imageGen — should be skipped silently.
+        generateContent: async () => {
+          calls.push("opencode-generate");
+          return { text: "should not happen", usage: null };
+        },
+      });
+      const gemini = makeGeminiAdapter({
+        supports: (id) => id === "gemini-3-pro-image-preview",
+        getModel: (id) =>
+          id === "gemini-3-pro-image-preview"
+            ? getBuiltInProvider("gemini")!.models.find((m) => m.id === id)
+            : undefined,
+        imageGen: async () => {
+          calls.push("gemini-imagegen");
+          return { images: [{ mimeType: "image/png", data: "AA==" }], usage: null };
+        },
+      });
+
+      const client = new MultiProviderClient({
+        adapters: [openCode, gemini],
+        defaultPolicy: { preferredProviders: ["opencode", "gemini"] },
+      });
+      await client.imageGen({ model: "gemini-3-pro-image-preview", prompt: "hi" });
+      expect(calls).toEqual(["gemini-imagegen"]);
+    });
+  });
 });

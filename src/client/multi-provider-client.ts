@@ -1,6 +1,6 @@
 import { ProviderRouter } from "../provider/router.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "../provider/types.js";
-import type { GenerateParams, GenerateResponse } from "./types.js";
+import type { GenerateParams, GenerateResponse, ImageGenParams, ImageGenResponse } from "./types.js";
 
 export interface MultiProviderClientOptions {
   adapters: ProviderAdapter[];
@@ -77,6 +77,28 @@ export class MultiProviderClient {
 
   streamWithSelection(params: GenerateParams, policy?: RoutePolicy) {
     return this.router.executeStream(params, this.mergePolicy(policy));
+  }
+
+  /**
+   * Image generation. Routed to the first chain provider whose adapter
+   * implements `imageGen`; throws `CapabilityNotSupportedError` when no
+   * candidate supports it.
+   *
+   * The provider-specific options bag (`params.options`) is passed through
+   * verbatim — Gemini honors `{ fallbackModel, dedicatedKey }`; other
+   * adapters ignore.
+   */
+  async imageGen(params: ImageGenParams, policy?: RoutePolicy): Promise<ImageGenResponse> {
+    const { selection, response } = await this.router.executeImageGen(
+      params,
+      this.mergePolicy(policy),
+    );
+    this.onSelect?.(selection, { model: params.model, prompt: params.prompt } as GenerateParams);
+    return response;
+  }
+
+  imageGenWithSelection(params: ImageGenParams, policy?: RoutePolicy) {
+    return this.router.executeImageGen(params, this.mergePolicy(policy));
   }
 
   getRouter(): ProviderRouter {

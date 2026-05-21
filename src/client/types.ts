@@ -96,6 +96,25 @@ export interface GenerateResponse {
   usage: TokenUsage | null;
 }
 
+export interface ImageGenParams {
+  /** Image-capable model id, e.g. "gemini-3-pro-image-preview". */
+  model: string;
+  prompt: string;
+  referenceImages?: ImagePart[];
+  options?: {
+    /** Gemini: retry once with this model on model-not-found/not-supported errors. */
+    fallbackModel?: string;
+    /** Gemini: bypass the pool and use this key for a one-off image call. */
+    dedicatedKey?: string;
+  };
+}
+
+export interface ImageGenResponse {
+  images: Array<{ mimeType: string; data: string }>;
+  text?: string;
+  usage: TokenUsage | null;
+}
+
 // ── Client options ─────────────────────────────────────────────────────
 
 export interface ClientOptions {
@@ -116,5 +135,12 @@ export class StreamInterruptedError extends Error {
     );
     this.name = "StreamInterruptedError";
     this.chunksReceived = chunksReceived;
+  }
+}
+
+export class CapabilityNotSupportedError extends Error {
+  constructor(provider: string, capability: string) {
+    super(`${provider} does not support capability ${capability}`);
+    this.name = "CapabilityNotSupportedError";
   }
 }

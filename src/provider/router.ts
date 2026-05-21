@@ -1,4 +1,5 @@
-import type { GenerateParams, GenerateResponse } from "../client/types.js";
+import { CapabilityNotSupportedError } from "../client/types.js";
+import type { GenerateParams, GenerateResponse, ImageGenParams, ImageGenResponse } from "../client/types.js";
 import { defaultProviderPriority, getBuiltInModel } from "./models.js";
 import type { ProviderAdapter, RoutePolicy, RoutedProviderSelection } from "./types.js";
 
@@ -30,6 +31,14 @@ function matchesCapabilities(
   });
 }
 
+function supportsRequiredMethod(adapter: ProviderAdapter, method?: RoutePolicy["requiredMethod"]): boolean {
+  if (!method) return true;
+  // The optional method is defined on ProviderAdapter as `method?(...)`; index
+  // access via the union widens to `unknown`, so we cast to a callable check.
+  const fn = (adapter as unknown as Record<string, unknown>)[method];
+  return typeof fn === "function";
+}
+
 export interface RoutedExecution {
   selection: RoutedProviderSelection;
   response: GenerateResponse;
@@ -38,6 +47,11 @@ export interface RoutedExecution {
 export interface RoutedStream {
   selection: RoutedProviderSelection;
   stream: AsyncGenerator<string, void, unknown>;
+}
+
+export interface RoutedImageGen {
+  selection: RoutedProviderSelection;
+  response: ImageGenResponse;
 }
 
 export class ProviderRouter {
@@ -99,6 +113,39 @@ export class ProviderRouter {
     return { selection, stream };
   }
 
+  async executeImageGen(
+    params: ImageGenParams,
+    policy: RoutePolicy = {}
+  ): Promise<RoutedImageGen> {
+    const effectivePolicy: RoutePolicy = {
+      ...policy,
+      preferredModel: policy.preferredModel ?? params.model,
+      requiredCapabilities: { imageOutput: true, ...(policy.requiredCapabilities ?? {}) },
+      requiredMethod: "imageGen",
+    };
+    const candidates = this.selectAdapterCandidates(effectivePolicy);
+
+    let lastError: unknown;
+    for (let index = 0; index < candidates.length; index += 1) {
+      const { adapter, selection } = candidates[index];
+      if (!adapter.imageGen) {
+        lastError = new CapabilityNotSupportedError(selection.provider, "imageGen");
+        continue;
+      }
+      try {
+        const response = await adapter.imageGen({ ...params, model: selection.model });
+        return { selection, response };
+      } catch (err) {
+        lastError = err;
+        if (!this.canTryNextCandidate(candidates, index, effectivePolicy)) {
+          throw err;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new CapabilityNotSupportedError("provider", "imageGen");
+  }
+
   private selectAdapter(policy: RoutePolicy): {
     adapter: ProviderAdapter;
     selection: RoutedProviderSelection;
@@ -140,7 +187,9 @@ export class ProviderRouter {
         continue;
       }
 
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters
+        .filter((item) => item.provider.id === providerID)
+        .filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       if (providerAdapters.length === 0) continue;
 
       const adaptersToTry = policy.allowSameProviderCredentialFallback
@@ -221,7 +270,9 @@ export class ProviderRouter {
       const providerChanged = providerID !== selectedProviderID;
       if (providerChanged && !policy.allowCrossProviderFallback) continue;
 
-      const providerAdapters = this.adapters.filter((item) => item.provider.id === providerID);
+      const providerAdapters = this.adapters
+        .filter((item) => item.provider.id === providerID)
+        .filter((item) => supportsRequiredMethod(item, policy.requiredMethod));
       const adaptersToTry = policy.allowSameProviderCredentialFallback
         ? providerAdapters
         : providerAdapters.slice(0, 1);

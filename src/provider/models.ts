@@ -16,6 +16,34 @@ const geminiModels = [
     outputLimit: 65_536,
     costTier: "low" as const,
   },
+  {
+    id: "gemini-3-pro-image-preview",
+    provider: ProviderID.Gemini,
+    name: "Gemini 3 Pro Image Preview",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true,
+    },
+    costTier: "high" as const,
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    provider: ProviderID.Gemini,
+    name: "Gemini 2.5 Flash Image",
+    capabilities: {
+      streaming: false,
+      tools: false,
+      reasoning: true,
+      multimodalInput: true,
+      multimodalOutput: true,
+      imageOutput: true,
+    },
+    costTier: "medium" as const,
+  },
 ];
 
 const openAIModels = [

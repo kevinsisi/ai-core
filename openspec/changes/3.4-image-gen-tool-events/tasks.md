@@ -19,19 +19,19 @@
 - [x] 1.4 Update `src/provider/adapters/opencode.ts:generateContent`: regex-extract `<tool_call>{...}</tool_call>` blocks from the response text, populate `toolCalls`, strip the matched substrings from `text`.
 - [x] 1.5 Add vitest cases: Gemini function-call response, OpenAI tool-call response, OpenCode XML response, plain text response (no `toolCalls`).
 - [x] 1.6 `npm run build:check && npm test`.
-- [ ] 1.7 T1 commit `feat(client): surface toolCalls on GenerateResponse (T1/3)`.
+- [x] 1.7 T1 commit `feat(client): surface toolCalls on GenerateResponse (T1/3)` — committed as `4e68510`.
 
 ## T2 — `imageGen` capability
 
-- [ ] 2.1 Extend `src/client/types.ts`: `ImageGenParams`, `ImageGenResponse`. Extend `ProviderCapabilities` (`src/provider/schema.ts`) with optional `imageOutput?: boolean`.
-- [ ] 2.2 Extend `src/provider/types.ts`: optional `imageGen?(params): Promise<ImageGenResponse>` on `ProviderAdapter`; optional `requiredMethod?: 'imageGen' | 'chatWithTools'` on `RoutePolicy`.
-- [ ] 2.3 Extend `src/provider/router.ts:selectAdapter`: filter adapters by `policy.requiredMethod` if set (exclude adapters whose corresponding method is `undefined`).
-- [ ] 2.4 Add Gemini-specific image-gen call site in `src/provider/adapters/gemini.ts`: implement `imageGen(params)` against `generateContent({ contents: [...refImages, {text:prompt}], generationConfig: { responseModalities: ['IMAGE','TEXT'] }})`. Honor `options.fallbackModel` (one retry on a model-not-found-class error) and `options.dedicatedKey` (bypass KeyPool — construct a one-off `GoogleGenerativeAI` client).
-- [ ] 2.5 Mark Gemini image preview models (`gemini-3-pro-image-preview`, `gemini-2.5-flash-image`) with `capabilities.imageOutput: true` in `src/provider/models.ts`.
-- [ ] 2.6 Extend `src/client/multi-provider-client.ts`: add `imageGen(params, policy?)` proxying via router; throws `CapabilityNotSupportedError` when no candidate supports it.
-- [ ] 2.7 Re-export `ImageGenParams`, `ImageGenResponse`, `imageGen` method from `src/client/index.ts` & root `src/index.ts`.
-- [ ] 2.8 vitest cases: Gemini happy path (primary model), Gemini fallback model retry on 404, dedicated-key bypasses pool, OpenCode adapter throws `CapabilityNotSupportedError`, router skips OpenCode silently and selects Gemini when chain is `['opencode','gemini']`.
-- [ ] 2.9 `npm run build:check && npm test`.
+- [x] 2.1 Extend `src/client/types.ts`: `ImageGenParams`, `ImageGenResponse`. Extend `ProviderCapabilities` (`src/provider/schema.ts`) with optional `imageOutput?: boolean`.
+- [x] 2.2 Extend `src/provider/types.ts`: optional `imageGen?(params): Promise<ImageGenResponse>` on `ProviderAdapter`; optional `requiredMethod?: 'imageGen' | 'chatWithTools'` on `RoutePolicy`.
+- [x] 2.3 Extend `src/provider/router.ts:selectAdapter`: filter adapters by `policy.requiredMethod` if set (exclude adapters whose corresponding method is `undefined`).
+- [x] 2.4 Add Gemini-specific image-gen call site in `src/provider/adapters/gemini.ts`: implement `imageGen(params)` against `generateContent({ contents: [...refImages, {text:prompt}], generationConfig: { responseModalities: ['IMAGE','TEXT'] }})`. Honor `options.fallbackModel` (one retry on a model-not-found-class error) and `options.dedicatedKey` (bypass KeyPool — construct a one-off `GoogleGenerativeAI` client).
+- [x] 2.5 Mark Gemini image preview models (`gemini-3-pro-image-preview`, `gemini-2.5-flash-image`) with `capabilities.imageOutput: true` in `src/provider/models.ts`.
+- [x] 2.6 Extend `src/client/multi-provider-client.ts`: add `imageGen(params, policy?)` proxying via router; throws `CapabilityNotSupportedError` when no candidate supports it.
+- [x] 2.7 Re-export `ImageGenParams`, `ImageGenResponse`, `imageGen` method from `src/client/index.ts` & root `src/index.ts`.
+- [x] 2.8 vitest cases: Gemini happy path (primary model), Gemini fallback model retry on 404, dedicated-key bypasses pool, OpenCode adapter throws `CapabilityNotSupportedError`, router skips OpenCode silently and selects Gemini when chain is `['opencode','gemini']`.
+- [x] 2.9 `npm run build:check && npm test`.
 - [ ] 2.10 T2 commit `feat(provider): add imageGen capability with Gemini adapter (T2/3)`.
 
 ## T3 — `chatWithTools` (streaming + tool loop)
