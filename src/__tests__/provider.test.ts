@@ -743,6 +743,38 @@ describe("opencode provider adapter", () => {
     expect(adapter.getModel("gpt-4.1-mini")).toBeUndefined();
   });
 
+  it("exposes OpenCode responses through streamContent as a pseudo-stream", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/session")) {
+        return { ok: true, json: async () => ({ id: "stream-session" }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          parts: [
+            { type: "text", text: "streamed" },
+            { type: "text", text: " response" },
+          ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const adapter = new OpenCodeProviderAdapter(
+      { type: "pool", provider: "opencode" },
+      { defaultModel: { providerID: "google", id: "gemini-2.5-flash" } }
+    );
+
+    expect(adapter.getModel("google/gemini-2.5-flash")?.capabilities.streaming).toBe(true);
+
+    const chunks: string[] = [];
+    for await (const chunk of adapter.streamContent({ model: "google/gemini-2.5-flash", prompt: "hi" })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual(["streamed response"]);
+  });
+
   it("deletes the session after generateContent completes", async () => {
     const deletedSessions: string[] = [];
     const fetchMock = vi.fn(async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {

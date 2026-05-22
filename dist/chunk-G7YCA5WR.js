@@ -3,7 +3,7 @@ import {
 } from "./chunk-YUQCRD55.js";
 import {
   ProviderID
-} from "./chunk-GSINE2EE.js";
+} from "./chunk-NIHYAC7Q.js";
 
 // src/client/tool-conversion.ts
 function toGeminiTools(tools) {
@@ -380,7 +380,7 @@ var openCodeModels = [
     provider: ProviderID.OpenCode,
     name: "OpenCode DeepSeek V4 Flash Free",
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,
@@ -726,4 +726,4 @@ export {
   listRegisteredProviders,
   ProviderRouter
 };
-//# sourceMappingURL=chunk-HKNTXQ2A.js.map
+//# sourceMappingURL=chunk-G7YCA5WR.js.map

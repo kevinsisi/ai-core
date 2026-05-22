@@ -3,14 +3,14 @@ import {
 } from "./chunk-4KJMSVMU.js";
 import {
   MultiProviderClient
-} from "./chunk-QFUJCX56.js";
+} from "./chunk-6WNQ2TOK.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-PES4O5RC.js";
+} from "./chunk-5HBWSMHC.js";
 import {
   CapabilityNotSupportedError,
   GeminiClient,
@@ -29,7 +29,7 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-HKNTXQ2A.js";
+} from "./chunk-G7YCA5WR.js";
 import {
   LeaseHeartbeat,
   StepRunner,
@@ -58,13 +58,13 @@ import {
   isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "./chunk-BH7KXBLP.js";
+} from "./chunk-JXXS2CXM.js";
 import {
   ProviderID
-} from "./chunk-GSINE2EE.js";
+} from "./chunk-NIHYAC7Q.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.4.0";
+var AI_CORE_VERSION = "3.4.1";
 export {
   AI_CORE_VERSION,
   AgentRuntime,

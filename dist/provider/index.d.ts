@@ -143,6 +143,12 @@ declare class OpenAIProviderAdapter extends OpenAICompatibleAdapter {
  *   gpt-4o). Pass `images` in GenerateParams as InlineImagePart objects. The
  *   adapter converts them to OpenCode file parts with base64 data URLs.
  *
+ * ## Streaming
+ *
+ *   OpenCode currently returns a completed assistant message instead of token
+ *   deltas. `streamContent()` exposes that response as a pseudo-stream by
+ *   yielding the completed text once, so SSE consumers can keep one routed path.
+ *
  * ## Conversation history
  *
  *   OpenCode sessions maintain history internally. For multi-turn conversations,
@@ -201,7 +207,7 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
     generateContent(params: GenerateParams): Promise<GenerateResponse>;
-    streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown>;
+    streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown>;
     /**
      * Streaming chat with tool-use orchestration. OpenCode's session API is
      * one-shot request/response, so streaming here means: each round's full

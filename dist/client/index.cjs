@@ -528,7 +528,7 @@ var openCodeModels = [
     provider: ProviderID.OpenCode,
     name: "OpenCode DeepSeek V4 Flash Free",
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,

@@ -4,7 +4,7 @@ import {
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "../chunk-PES4O5RC.js";
+} from "../chunk-5HBWSMHC.js";
 import {
   ProviderRouter,
   builtInProviders,
@@ -17,7 +17,7 @@ import {
   listRegisteredProviders,
   registerProvider,
   unregisterProvider
-} from "../chunk-HKNTXQ2A.js";
+} from "../chunk-G7YCA5WR.js";
 import "../chunk-YUQCRD55.js";
 import "../chunk-NHGYIXGT.js";
 import {
@@ -25,10 +25,10 @@ import {
   isOAuthCredentialExpired,
   refreshOpenAIToken,
   startOpenAIAuth
-} from "../chunk-BH7KXBLP.js";
+} from "../chunk-JXXS2CXM.js";
 import {
   ProviderID
-} from "../chunk-GSINE2EE.js";
+} from "../chunk-NIHYAC7Q.js";
 export {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,

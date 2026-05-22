@@ -16,6 +16,6 @@ import '@google/generative-ai';
  * or report which ai-core build they are running against, and kept in sync
  * with package.json on every release.
  */
-declare const AI_CORE_VERSION = "3.4.0";
+declare const AI_CORE_VERSION = "3.4.1";
 
 export { AI_CORE_VERSION };

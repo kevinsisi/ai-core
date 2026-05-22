@@ -385,7 +385,7 @@ var openCodeModels = [
     provider: ProviderID.OpenCode,
     name: "OpenCode DeepSeek V4 Flash Free",
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,
@@ -1669,7 +1669,7 @@ function synthesizeModel(model) {
     provider: "opencode",
     name: modelToID(model),
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,
@@ -1807,10 +1807,9 @@ var OpenCodeProviderAdapter = class {
       this.deleteSession(session.id);
     }
   }
-  async *streamContent(_params) {
-    throw new Error(
-      "OpenCodeProviderAdapter does not support streaming. Use generateContent instead."
-    );
+  async *streamContent(params) {
+    const response = await this.generateContent(params);
+    if (response.text) yield response.text;
   }
   /**
    * Streaming chat with tool-use orchestration. OpenCode's session API is

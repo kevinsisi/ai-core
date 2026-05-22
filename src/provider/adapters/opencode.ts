@@ -38,6 +38,12 @@
  *   gpt-4o). Pass `images` in GenerateParams as InlineImagePart objects. The
  *   adapter converts them to OpenCode file parts with base64 data URLs.
  *
+ * ## Streaming
+ *
+ *   OpenCode currently returns a completed assistant message instead of token
+ *   deltas. `streamContent()` exposes that response as a pseudo-stream by
+ *   yielding the completed text once, so SSE consumers can keep one routed path.
+ *
  * ## Conversation history
  *
  *   OpenCode sessions maintain history internally. For multi-turn conversations,
@@ -175,7 +181,7 @@ function synthesizeModel(model: OpenCodeModelRef): ModelDefinition {
     provider: "opencode",
     name: modelToID(model),
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,
@@ -348,10 +354,9 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     }
   }
 
-  async *streamContent(_params: GenerateParams): AsyncGenerator<string, void, unknown> {
-    throw new Error(
-      "OpenCodeProviderAdapter does not support streaming. Use generateContent instead.",
-    );
+  async *streamContent(params: GenerateParams): AsyncGenerator<string, void, unknown> {
+    const response = await this.generateContent(params);
+    if (response.text) yield response.text;
   }
 
   /**

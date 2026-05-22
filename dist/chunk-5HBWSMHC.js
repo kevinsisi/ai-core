@@ -7,13 +7,13 @@ import {
   getBuiltInProvider,
   toGeminiTools,
   toOpenAITools
-} from "./chunk-HKNTXQ2A.js";
+} from "./chunk-G7YCA5WR.js";
 import {
   withRetry
 } from "./chunk-YUQCRD55.js";
 import {
   ProviderID
-} from "./chunk-GSINE2EE.js";
+} from "./chunk-NIHYAC7Q.js";
 
 // src/provider/adapters/gemini.ts
 import { randomUUID } from "crypto";
@@ -567,7 +567,7 @@ function synthesizeModel(model) {
     provider: "opencode",
     name: modelToID(model),
     capabilities: {
-      streaming: false,
+      streaming: true,
       tools: false,
       reasoning: true,
       multimodalInput: true,
@@ -705,10 +705,9 @@ var OpenCodeProviderAdapter = class {
       this.deleteSession(session.id);
     }
   }
-  async *streamContent(_params) {
-    throw new Error(
-      "OpenCodeProviderAdapter does not support streaming. Use generateContent instead."
-    );
+  async *streamContent(params) {
+    const response = await this.generateContent(params);
+    if (response.text) yield response.text;
   }
   /**
    * Streaming chat with tool-use orchestration. OpenCode's session API is
@@ -884,4 +883,4 @@ export {
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-PES4O5RC.js.map
+//# sourceMappingURL=chunk-5HBWSMHC.js.map
