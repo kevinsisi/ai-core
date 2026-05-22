@@ -1,16 +1,16 @@
 import {
-  MultiProviderClient
-} from "./chunk-6WNQ2TOK.js";
-import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
+import {
+  MultiProviderClient
+} from "./chunk-6WNQ2TOK.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-RM4BBEPP.js";
+} from "./chunk-VFYKYNLI.js";
 import {
   CapabilityNotSupportedError,
   GeminiClient,
@@ -64,7 +64,7 @@ import {
 } from "./chunk-NIHYAC7Q.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.4.2";
+var AI_CORE_VERSION = "3.4.3";
 export {
   AI_CORE_VERSION,
   AgentRuntime,

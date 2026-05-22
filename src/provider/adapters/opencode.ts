@@ -108,6 +108,14 @@ export interface OpenCodeAdapterOptions {
    * When false (default), sends Bearer token or no auth.
    */
   basicAuth?: boolean;
+  /**
+   * OpenCode model variant passed to `POST /session` as `model.variant`.
+   * Controls reasoning effort / quality tier (e.g. "default", "medium",
+   * "high") for models that expose multiple variants. Defaults to "default".
+   * Per the OpenCode HTTP contract, variant only appears in the session-
+   * creation payload; message payloads remain `{ providerID, modelID }`.
+   */
+  variant?: string;
 }
 
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
@@ -311,6 +319,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
   private readonly title: string;
   private readonly defaultModel: OpenCodeModelRef;
   private readonly basicAuth: boolean;
+  private readonly variant: string;
 
   constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions) {
     this.credential = credential;
@@ -323,6 +332,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     this.agent = options.agent ?? "general";
     this.title = options.title ?? "ai-core opencode session";
     this.basicAuth = options.basicAuth ?? false;
+    this.variant = options.variant ?? "default";
     this.provider = {
       id: "opencode",
       name: "OpenCode",
@@ -496,7 +506,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model) }),
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model, this.variant) }),
     });
     const json = await this.readJson<OpenCodeSessionResponse>(response, "create session");
     if (!json.id) throw new Error("OpenCode create session response missing id");

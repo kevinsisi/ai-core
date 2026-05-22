@@ -193,6 +193,14 @@ interface OpenCodeAdapterOptions {
      * When false (default), sends Bearer token or no auth.
      */
     basicAuth?: boolean;
+    /**
+     * OpenCode model variant passed to `POST /session` as `model.variant`.
+     * Controls reasoning effort / quality tier (e.g. "default", "medium",
+     * "high") for models that expose multiple variants. Defaults to "default".
+     * Per the OpenCode HTTP contract, variant only appears in the session-
+     * creation payload; message payloads remain `{ providerID, modelID }`.
+     */
+    variant?: string;
 }
 type OpenCodeCredential = ApiKeyCredential | OAuthCredential | PoolCredential;
 declare class OpenCodeProviderAdapter implements ProviderAdapter {
@@ -203,6 +211,7 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     private readonly title;
     private readonly defaultModel;
     private readonly basicAuth;
+    private readonly variant;
     constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;

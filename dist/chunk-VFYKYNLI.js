@@ -661,6 +661,7 @@ var OpenCodeProviderAdapter = class {
   title;
   defaultModel;
   basicAuth;
+  variant;
   constructor(credential, options) {
     this.credential = credential;
     this.defaultModel = options.defaultModel;
@@ -670,6 +671,7 @@ var OpenCodeProviderAdapter = class {
     this.agent = options.agent ?? "general";
     this.title = options.title ?? "ai-core opencode session";
     this.basicAuth = options.basicAuth ?? false;
+    this.variant = options.variant ?? "default";
     this.provider = {
       id: "opencode",
       name: "OpenCode",
@@ -807,7 +809,7 @@ ${toolResults.join("\n")}`;
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model) })
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model, this.variant) })
     });
     const json = await this.readJson(response, "create session");
     if (!json.id) throw new Error("OpenCode create session response missing id");
@@ -886,4 +888,4 @@ export {
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
 };
-//# sourceMappingURL=chunk-RM4BBEPP.js.map
+//# sourceMappingURL=chunk-VFYKYNLI.js.map
