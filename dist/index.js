@@ -1,9 +1,9 @@
 import {
-  AgentRuntime
-} from "./chunk-4KJMSVMU.js";
-import {
   MultiProviderClient
 } from "./chunk-6WNQ2TOK.js";
+import {
+  AgentRuntime
+} from "./chunk-4KJMSVMU.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,

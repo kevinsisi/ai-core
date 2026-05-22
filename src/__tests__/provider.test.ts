@@ -671,10 +671,13 @@ describe("opencode provider adapter", () => {
 
     expect(calls[0].url).toBe("http://localhost:4096/session");
     expect(calls[0].headers.Authorization).toBe("Bearer oc-token");
+    // POST /session uses { providerID, id, variant }; POST /session/.../message
+    // uses { providerID, modelID }. The two key shapes are deliberate per the
+    // OpenCode HTTP contract — mixing them returns {"_tag":"BadRequest"}.
     expect(calls[0].body).toEqual({
       title: "Model test",
       agent: "general",
-      model: { providerID: "openai", modelID: "gpt-5.5" },
+      model: { providerID: "openai", id: "gpt-5.5", variant: "default" },
     });
     expect(calls[1].url).toBe("http://localhost:4096/session/session-1/message");
     expect(calls[1].body).toEqual({
