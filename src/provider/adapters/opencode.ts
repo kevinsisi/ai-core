@@ -151,6 +151,12 @@ interface OpenCodeModelPayload {
   providerID: string;
 }
 
+interface OpenCodeSessionModelPayload {
+  id: string;
+  providerID: string;
+  variant: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function trimTrailingSlash(value: string): string {
@@ -163,6 +169,19 @@ function modelToID(model: OpenCodeModelRef): string {
 
 function modelToPayload(model: OpenCodeModelRef): OpenCodeModelPayload {
   return { modelID: model.id, providerID: model.providerID };
+}
+
+/**
+ * Session-creation payload uses a different key shape than message payloads:
+ *   POST /session            → model: { providerID, id, variant }
+ *   POST /session/.../message → model: { providerID, modelID }
+ *
+ * Mixing them up returns OpenCode `{"_tag":"BadRequest"}` (e.g. session sent
+ * with `modelID` instead of `id`, or message sent with `id` instead of
+ * `modelID`). See home-basic/opencode/README.md "Consumer API Contract".
+ */
+function modelToSessionPayload(model: OpenCodeModelRef, variant = "default"): OpenCodeSessionModelPayload {
+  return { id: model.id, providerID: model.providerID, variant };
 }
 
 function parseModelRef(modelID: string, defaultProviderID: string): OpenCodeModelRef | undefined {
@@ -477,7 +496,7 @@ export class OpenCodeProviderAdapter implements ProviderAdapter {
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) }),
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model) }),
     });
     const json = await this.readJson<OpenCodeSessionResponse>(response, "create session");
     if (!json.id) throw new Error("OpenCode create session response missing id");

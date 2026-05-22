@@ -10,7 +10,7 @@ import {
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-5HBWSMHC.js";
+} from "./chunk-RM4BBEPP.js";
 import {
   CapabilityNotSupportedError,
   GeminiClient,
@@ -64,7 +64,7 @@ import {
 } from "./chunk-NIHYAC7Q.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.4.1";
+var AI_CORE_VERSION = "3.4.2";
 export {
   AI_CORE_VERSION,
   AgentRuntime,

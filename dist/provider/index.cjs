@@ -1654,6 +1654,9 @@ function modelToID(model) {
 function modelToPayload(model) {
   return { modelID: model.id, providerID: model.providerID };
 }
+function modelToSessionPayload(model, variant = "default") {
+  return { id: model.id, providerID: model.providerID, variant };
+}
 function parseModelRef(modelID, defaultProviderID) {
   const sep = modelID.indexOf("/");
   if (sep > 0 && sep < modelID.length - 1) {
@@ -1906,7 +1909,7 @@ ${toolResults.join("\n")}`;
     const response = await fetch(`${this.baseURL}/session`, {
       method: "POST",
       headers: this.buildHeaders(),
-      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToPayload(model) })
+      body: JSON.stringify({ title: this.title, agent: this.agent, model: modelToSessionPayload(model) })
     });
     const json = await this.readJson(response, "create session");
     if (!json.id) throw new Error("OpenCode create session response missing id");
