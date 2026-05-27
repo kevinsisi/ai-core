@@ -1,7 +1,15 @@
-## ADDED Requirements
+# agent-runtime-primitives Specification
 
+## Purpose
+TBD - created by archiving change agent-runtime-primitives. Update Purpose after archive.
+## Requirements
 ### Requirement: ai-core SHALL expose explicit active-task state primitives
 `@kevinsisi/ai-core` SHALL expose typed primitives for active task state instead of requiring consumers to keep long-running task progress only in transcript memory.
+
+#### Scenario: Active task state is held in typed primitives
+- **WHEN** a consumer tracks long-running task progress through `AgentRuntime`
+- **THEN** the state is exposed as typed `ActiveTask` and `TaskCheckpoint` values
+- **AND** progress does not depend on transcript memory alone
 
 ### Requirement: AgentRuntime metadata and pending args SHALL be structured data
 `AgentRuntime` SHALL only accept structured plain data for task metadata and pending action args so the runtime can snapshot state safely.
@@ -53,3 +61,4 @@ The runtime SHALL not mark a task complete while checkpoints or blockers remain.
 #### Scenario: Task completes only when gates are clear
 - **WHEN** all checkpoints are `completed` or `cancelled` and blockers are empty
 - **THEN** `completeTask()` succeeds and the task status becomes `completed`
+

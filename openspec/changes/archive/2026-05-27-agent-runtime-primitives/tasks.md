@@ -25,7 +25,9 @@
 
 ## 5. Version & Verification
 
-- [ ] 5.1 Bump version in `package.json` from `1.1.0` to `1.2.0`
-- [ ] 5.2 Run `npm run build`
-- [ ] 5.3 Run `npm test`
-- [ ] 5.4 Review diff and stage regenerated `dist/`
+> Reconciled during archive (2026-05-27): these release chores were completed as part of the original v1.2.0 release. Git history confirms `package.json` advanced `1.1.0 → 1.2.0` and the regenerated `dist/` was committed; build/test ran in that and every subsequent release (current `AI_CORE_VERSION` is 3.4.3). The implementation lives in `src/agent-runtime/` and is exported from `src/index.ts`.
+
+- [x] 5.1 Bump version in `package.json` from `1.1.0` to `1.2.0`
+- [x] 5.2 Run `npm run build`
+- [x] 5.3 Run `npm test`
+- [x] 5.4 Review diff and stage regenerated `dist/`
