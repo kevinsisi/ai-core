@@ -1673,7 +1673,7 @@ function synthesizeModel(model) {
     name: modelToID(model),
     capabilities: {
       streaming: true,
-      tools: false,
+      tools: true,
       reasoning: true,
       multimodalInput: true,
       multimodalOutput: false
