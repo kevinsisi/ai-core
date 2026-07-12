@@ -1,26 +1,16 @@
 import {
-  MultiProviderClient
-} from "./chunk-6WNQ2TOK.js";
-import {
   AgentRuntime
 } from "./chunk-4KJMSVMU.js";
 import {
-  LeaseHeartbeat,
-  StepRunner,
-  planPreferredKeys
-} from "./chunk-P3ARPLKV.js";
-import {
-  KeyPool,
-  SqliteAdapter
-} from "./chunk-TQP53VQG.js";
-import "./chunk-U42SY5KL.js";
+  MultiProviderClient
+} from "./chunk-25IBWIHB.js";
 import {
   GeminiProviderAdapter,
   OpenAICompatibleAdapter,
   OpenAIProviderAdapter,
   OpenCodeProviderAdapter,
   OpenRouterProviderAdapter
-} from "./chunk-XPTOWXZF.js";
+} from "./chunk-PXFDZ5A4.js";
 import {
   CapabilityNotSupportedError,
   GeminiClient,
@@ -39,7 +29,17 @@ import {
   toGeminiTools,
   toOpenAITools,
   unregisterProvider
-} from "./chunk-G7YCA5WR.js";
+} from "./chunk-MDTD7ITP.js";
+import {
+  LeaseHeartbeat,
+  StepRunner,
+  planPreferredKeys
+} from "./chunk-FPQQMHFF.js";
+import {
+  KeyPool,
+  SqliteAdapter
+} from "./chunk-KUFFHZDJ.js";
+import "./chunk-U42SY5KL.js";
 import {
   MaxRetriesExceededError,
   classifyError,
@@ -64,7 +64,7 @@ import {
 } from "./chunk-NIHYAC7Q.js";
 
 // src/version.ts
-var AI_CORE_VERSION = "3.4.3";
+var AI_CORE_VERSION = "3.5.0";
 export {
   AI_CORE_VERSION,
   AgentRuntime,

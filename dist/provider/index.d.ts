@@ -194,6 +194,15 @@ interface OpenCodeAdapterOptions {
      */
     basicAuth?: boolean;
     /**
+     * OpenAI-compatible chat-completions endpoint used for NATIVE function calling
+     * in chatWithTools() — far more reliable than the legacy <tool_call> prompt
+     * hack (free Zen models emit tool_calls natively but routinely refuse to
+     * hand-write the XML). Defaults to the OpenCode Zen endpoint. Native calling is
+     * only attempted when the credential is an api-key Bearer token (not basicAuth);
+     * otherwise, or if the first native call fails, the legacy prompt protocol runs.
+     */
+    nativeToolsURL?: string;
+    /**
      * OpenCode model variant passed to `POST /session` as `model.variant`.
      * Controls reasoning effort / quality tier (e.g. "default", "medium",
      * "high") for models that expose multiple variants. Defaults to "default".
@@ -212,6 +221,7 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
     private readonly defaultModel;
     private readonly basicAuth;
     private readonly variant;
+    private readonly nativeToolsURL;
     constructor(credential: OpenCodeCredential, options: OpenCodeAdapterOptions);
     supports(modelID: string): boolean;
     getModel(modelID: string): ModelDefinition | undefined;
@@ -230,6 +240,13 @@ declare class OpenCodeProviderAdapter implements ProviderAdapter {
      * to the conversation, and sends the next message.
      */
     chatWithTools(params: GenerateParams, ctx: ChatToolContext): AsyncIterable<ChatEvent>;
+    /**
+     * Native OpenAI-compatible function calling against `nativeToolsURL`. Collects
+     * all ChatEvents; throws NativeUnsupportedError if the FIRST request fails so
+     * chatWithTools() can fall back to the prompt protocol without double-running
+     * any tool.
+     */
+    private collectNativeToolChat;
     private resolveModel;
     private buildHeaders;
     private createSession;

@@ -1,6 +1,6 @@
 import {
   MultiProviderClient
-} from "../chunk-6WNQ2TOK.js";
+} from "../chunk-25IBWIHB.js";
 import {
   CapabilityNotSupportedError,
   GeminiClient,
@@ -8,7 +8,7 @@ import {
   StreamInterruptedError,
   toGeminiTools,
   toOpenAITools
-} from "../chunk-G7YCA5WR.js";
+} from "../chunk-MDTD7ITP.js";
 import "../chunk-YUQCRD55.js";
 import "../chunk-NHGYIXGT.js";
 import "../chunk-NIHYAC7Q.js";

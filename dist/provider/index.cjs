@@ -1739,6 +1739,29 @@ function buildOpenCodeToolBlock(tools) {
 function serializeHistory(history) {
   return history.map((msg) => `${msg.role === "model" ? "Assistant" : "User"}: ${msg.parts}`).join("\n\n");
 }
+var NativeUnsupportedError = class extends Error {
+};
+function toNativeTools(tools) {
+  const fns = (tools ?? []).filter(isFunctionTool);
+  if (fns.length === 0) return void 0;
+  return fns.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description ?? "",
+      parameters: t.parameters ?? { type: "object", properties: {} }
+    }
+  }));
+}
+function buildNativeMessages(params) {
+  const messages = [];
+  if (params.systemInstruction) messages.push({ role: "system", content: params.systemInstruction });
+  for (const turn of params.history ?? []) {
+    messages.push({ role: turn.role === "model" ? "assistant" : "user", content: turn.parts });
+  }
+  messages.push({ role: "user", content: params.prompt });
+  return messages;
+}
 async function imagePartToOpenCode(image) {
   if (image.type === "inline") {
     return {
@@ -1764,9 +1787,11 @@ var OpenCodeProviderAdapter = class {
   defaultModel;
   basicAuth;
   variant;
+  nativeToolsURL;
   constructor(credential, options) {
     this.credential = credential;
     this.defaultModel = options.defaultModel;
+    this.nativeToolsURL = options.nativeToolsURL ?? "https://opencode.ai/zen/v1/chat/completions";
     this.baseURL = trimTrailingSlash(
       options.baseURL ?? ("baseURL" in credential ? credential.baseURL : void 0) ?? "http://127.0.0.1:4096"
     );
@@ -1833,6 +1858,15 @@ var OpenCodeProviderAdapter = class {
     if (!model) {
       throw new Error(`OpenCode adapter cannot resolve model "${params.model}"`);
     }
+    if (this.credential.type === "api" && this.credential.apiKey && !this.basicAuth) {
+      try {
+        const events = await this.collectNativeToolChat(params, ctx, model);
+        for (const ev of events) yield ev;
+        return;
+      } catch (e) {
+        if (!(e instanceof NativeUnsupportedError)) throw e;
+      }
+    }
     const maxRounds = ctx.maxToolRounds ?? 5;
     const toolBlock = buildOpenCodeToolBlock(params.tools);
     const systemInstruction = toolBlock ? `${params.systemInstruction ?? ""}
@@ -1890,6 +1924,75 @@ ${toolResults.join("\n")}`;
     }
   }
   // ── Private helpers ──────────────────────────────────────────────────────
+  /**
+   * Native OpenAI-compatible function calling against `nativeToolsURL`. Collects
+   * all ChatEvents; throws NativeUnsupportedError if the FIRST request fails so
+   * chatWithTools() can fall back to the prompt protocol without double-running
+   * any tool.
+   */
+  async collectNativeToolChat(params, ctx, model) {
+    const cred = this.credential;
+    if (cred.type !== "api" || !cred.apiKey) {
+      throw new NativeUnsupportedError("no api-key credential for native tool calling");
+    }
+    const apiKey = cred.apiKey;
+    const events = [];
+    const messages = buildNativeMessages(params);
+    const tools = toNativeTools(params.tools);
+    const maxRounds = ctx.maxToolRounds ?? 5;
+    let aggregated = "";
+    for (let round = 0; round <= maxRounds; round += 1) {
+      const body = { model: model.id, messages };
+      if (tools) {
+        body.tools = tools;
+        body.tool_choice = "auto";
+      }
+      let res;
+      try {
+        res = await fetch(this.nativeToolsURL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        if (round === 0) throw new NativeUnsupportedError(e.message);
+        throw e;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        if (round === 0) throw new NativeUnsupportedError(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+        events.push({ type: "text_delta", delta: `
+[tool step failed: HTTP ${res.status}]` });
+        break;
+      }
+      const data = await res.json();
+      const message = data.choices?.[0]?.message;
+      const rawCalls = message?.tool_calls ?? [];
+      if (rawCalls.length === 0) {
+        const content = (message?.content ?? "").trim();
+        if (content) {
+          aggregated += content;
+          events.push({ type: "text_delta", delta: content });
+        }
+        break;
+      }
+      messages.push({ role: "assistant", content: message?.content ?? null, tool_calls: rawCalls });
+      for (const rc of rawCalls) {
+        let args = {};
+        try {
+          args = JSON.parse(rc.function.arguments || "{}");
+        } catch {
+          args = {};
+        }
+        const call = { id: rc.id, name: rc.function.name, args };
+        events.push({ type: "tool_call", id: call.id, name: call.name, args: call.args });
+        const result = ctx.onToolCall ? await ctx.onToolCall(call) : "";
+        messages.push({ role: "tool", tool_call_id: rc.id, content: result });
+      }
+    }
+    events.push({ type: "done", fullText: aggregated });
+    return events;
+  }
   resolveModel(modelID) {
     const model = parseModelRef(modelID, this.defaultModel.providerID);
     if (!model?.id || !model.providerID) return void 0;
